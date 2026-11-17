@@ -1,0 +1,102 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+const lessons = [
+  {
+    id: 'lesson-01',
+    level: 'Beginner',
+    title: 'The Dead Stop Stun',
+    targetZone: 'Freeze Cue Ball within 50mm of Impact',
+    difficulty: '★☆☆☆☆',
+    description: 'Learn the exact balance of cue power and slight backspin that eliminates forward roll upon contacting the object ball.',
+  },
+  {
+    id: 'lesson-02',
+    level: 'Intermediate',
+    title: 'Screw Back for Black Position',
+    targetZone: 'Draw 600mm Back into Black Ball Zone',
+    difficulty: '★★★☆☆',
+    description: 'Pot the red in the middle pocket and use low cue tip contact to draw the cue ball back onto the high-value black.',
+  },
+  {
+    id: 'lesson-03',
+    level: 'Intermediate',
+    title: 'Topspin Follow-Through Break',
+    targetZone: 'Pass Through Object Line by 800mm',
+    difficulty: '★★☆☆☆',
+    description: 'High tip contact generates forward angular momentum, propelling the cue ball past the object ball into position.',
+  },
+  {
+    id: 'lesson-04',
+    level: 'Advanced',
+    title: 'Two-Cushion Snooker Escape',
+    targetZone: 'Contact Red Snookered Behind Baulk Colors',
+    difficulty: '★★★★☆',
+    description: 'Calculate multi-cushion diamond reflections to escape a tight snooker without conceding a foul.',
+  },
+  {
+    id: 'lesson-05',
+    level: 'Master',
+    title: 'Running Side Cushion Drift',
+    targetZone: 'Travel Full Table Length Along Rail',
+    difficulty: '★★★★★',
+    description: 'Apply running english to widen cushion exit angles and glide the cue ball effortlessly up to the yellow pocket.',
+  },
+];
+---
+
+<BaseLayout
+  title="Interactive Lessons & Guided Scenarios — CueCraft"
+  description="Structured snooker challenges and interactive scenarios designed to test cue-ball positioning, screw-back, and cushion escapes."
+>
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 py-16">
+    <div class="max-w-3xl mb-16">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface-card border border-brass-primary/30 text-brass-primary text-xs font-mono uppercase tracking-widest mb-4">
+        Interactive Curriculum
+      </div>
+      <h1 class="font-serif text-4xl sm:text-6xl font-bold text-ivory-text leading-tight mb-6">
+        Guided Practice Scenarios
+      </h1>
+      <p class="text-base sm:text-lg text-ivory-muted leading-relaxed">
+        Step-by-step challenges engineered to build muscle memory for shot power, tip contact offsets, and precision angle judgment.
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {lessons.map((lesson) => (
+        <div class="bg-surface-card border border-surface-subtle p-6 rounded-2xl flex flex-col justify-between hover:border-brass-primary/40 transition-colors">
+          <div>
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-xs font-mono px-2 py-0.5 rounded bg-surface-base border border-surface-subtle text-brass-primary font-bold">
+                {lesson.level}
+              </span>
+              <span class="text-xs font-mono text-brass-primary tracking-widest">
+                {lesson.difficulty}
+              </span>
+            </div>
+
+            <h2 class="font-serif text-xl font-bold text-ivory-text mb-2">
+              {lesson.title}
+            </h2>
+
+            <p class="text-xs text-ivory-muted leading-relaxed mb-4">
+              {lesson.description}
+            </p>
+
+            <div class="p-3 rounded-xl bg-surface-base border border-surface-subtle text-[11px] font-mono text-chalk-cyan mb-6">
+              TARGET: {lesson.targetZone}
+            </div>
+          </div>
+
+          <a
+            href="/play"
+            class="w-full py-2.5 px-4 rounded-xl bg-felt-surface hover:bg-felt-accent border border-felt-border text-ivory-text font-semibold text-xs tracking-wider uppercase text-center transition-colors shadow-sm flex items-center justify-center gap-2"
+          >
+            <span>Load Challenge in Simulator</span>
+            <span>&rarr;</span>
+          </a>
+        </div>
+      ))}
+    </div>
+  </div>
+</BaseLayout>

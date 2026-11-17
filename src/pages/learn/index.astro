@@ -1,0 +1,124 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+const modules = [
+  {
+    slug: 'cue-ball-control',
+    number: '01',
+    title: 'Understanding Cue-Ball Control & Stun',
+    category: 'Kinematics',
+    summary: 'Master the sliding-to-rolling friction transition, dead-stop stun shots, and the fundamental physics of potting without cue-ball drift.',
+    readingTime: '6 min read',
+  },
+  {
+    slug: 'side-spin-ballistics',
+    number: '02',
+    title: 'Side Spin, Swerve & Cushion Bite',
+    category: 'Rotational Dynamics',
+    summary: 'Understand running english versus check english, the physics of cue deflection (squirt), and how side spin modifies cushion rebound angles.',
+    readingTime: '8 min read',
+  },
+  {
+    slug: 'cushion-rebounds',
+    number: '03',
+    title: 'Cushion Rebounds & Multi-Angle Escapes',
+    category: 'Geometry',
+    summary: 'The coefficient of normal restitution, tangent friction of rubber cushions, and systematic calculation of two- and three-cushion escape paths.',
+    readingTime: '7 min read',
+  },
+  {
+    slug: 'collision-angles',
+    number: '04',
+    title: 'Ball Collision Angles & The 90° Rule',
+    category: 'Collision Mechanics',
+    summary: 'Why frictionless equal-mass spheres separate at exactly 90 degrees, and how cut-induced throw imparts unexpected spin to object balls.',
+    readingTime: '5 min read',
+  },
+  {
+    slug: 'speed-and-distance',
+    number: '05',
+    title: 'Speed, Distance & Rolling Resistance',
+    category: 'Friction Dynamics',
+    summary: 'Calculating stopping distances on championship Strachan baize cloth based on initial cue impulse velocity.',
+    readingTime: '6 min read',
+  },
+  {
+    slug: 'topspin-and-backspin',
+    number: '06',
+    title: 'Topspin (Follow) and Backspin (Screw)',
+    category: 'Spin Ballistics',
+    summary: 'How vertical tip offset translates into angular torque, and why screw-back shots exhibit delayed backwards acceleration.',
+    readingTime: '7 min read',
+  },
+];
+---
+
+<BaseLayout
+  title="The Science of Snooker — Learning Center"
+  description="Master championship snooker through scientific principles: cue ball control, spin ballistics, cushion restitution, and collision angles."
+>
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 py-16">
+    {/* Page Header */}
+    <div class="max-w-3xl mb-16">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface-card border border-brass-primary/30 text-brass-primary text-xs font-mono uppercase tracking-widest mb-4">
+        Educational Curriculum
+      </div>
+      <h1 class="font-serif text-4xl sm:text-6xl font-bold text-ivory-text leading-tight mb-6">
+        The Science of Snooker
+      </h1>
+      <p class="text-base sm:text-lg text-ivory-muted leading-relaxed">
+        Great break-building is not an intuition; it is the deliberate application of classical mechanics. Explore our rigorous, step-by-step guides decoding the ballistics of the sport.
+      </p>
+    </div>
+
+    {/* Articles Grid */}
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {modules.map((item) => (
+        <a
+          href={`/learn/${item.slug}`}
+          class="group flex flex-col bg-surface-card border border-surface-subtle hover:border-brass-primary/50 rounded-2xl p-6 transition-all hover:-translate-y-0.5 shadow-sm hover:shadow-brass-glow/10"
+        >
+          <div class="flex items-center justify-between mb-4">
+            <span class="font-mono text-xs text-brass-primary font-bold">
+              MODULE {item.number}
+            </span>
+            <span class="text-[11px] font-mono text-ivory-faint px-2 py-0.5 rounded bg-surface-base border border-surface-subtle">
+              {item.category}
+            </span>
+          </div>
+
+          <h2 class="font-serif text-xl font-bold text-ivory-text group-hover:text-brass-hover transition-colors mb-3 leading-snug">
+            {item.title}
+          </h2>
+
+          <p class="text-xs text-ivory-muted leading-relaxed mb-6">
+            {item.summary}
+          </p>
+
+          <div class="mt-auto pt-4 border-t border-surface-subtle flex items-center justify-between text-xs font-mono text-brass-muted group-hover:text-brass-primary transition-colors">
+            <span>{item.readingTime}</span>
+            <span class="group-hover:translate-x-1 transition-transform">&rarr;</span>
+          </div>
+        </a>
+      ))}
+    </div>
+
+    {/* Practice Callout */}
+    <div class="mt-16 p-8 rounded-2xl bg-felt-darkest border border-felt-border flex flex-col sm:flex-row items-center justify-between gap-6">
+      <div>
+        <h3 class="font-serif text-xl font-bold text-ivory-text mb-2">
+          Ready to put theory into practice?
+        </h3>
+        <p class="text-xs text-ivory-muted max-w-lg leading-relaxed">
+          Launch our interactive 2D physics lab with millimeter spin controls and instant trajectory raycasting.
+        </p>
+      </div>
+      <a
+        href="/play"
+        class="px-6 py-3 rounded-xl bg-brass-primary text-surface-base font-bold text-xs uppercase tracking-wider hover:bg-brass-hover transition-all shrink-0"
+      >
+        Open Simulation Lab
+      </a>
+    </div>
+  </div>
+</BaseLayout>

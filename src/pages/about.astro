@@ -1,0 +1,105 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { siteConfig } from '../config/site';
+---
+
+<BaseLayout
+  title="Platform Philosophy & Architecture — CueCraft"
+  description="Discover the engineering philosophy, mathematical modeling, and British heritage behind the CueCraft snooker platform."
+>
+  <div class="max-w-4xl mx-auto px-4 sm:px-6 py-16">
+    <div class="mb-14">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface-card border border-brass-primary/30 text-brass-primary text-xs font-mono uppercase tracking-widest mb-4">
+        Platform Philosophy
+      </div>
+      <h1 class="font-serif text-4xl sm:text-6xl font-bold text-ivory-text leading-tight mb-6">
+        Bridging 150 Years of Billiards Heritage with Modern Physics
+      </h1>
+      <p class="text-base sm:text-lg text-ivory-muted leading-relaxed">
+        CueCraft was created to replace guesswork with scientific clarity. We believe that when players truly understand the physical mechanics of the table, their confidence and break-building ability transform.
+      </p>
+    </div>
+
+    {/* Section: The Problem with Generic Simulators */}
+    <div class="space-y-12 text-sm text-ivory-muted leading-relaxed border-t border-surface-subtle pt-10">
+      <div>
+        <h2 class="font-serif text-2xl font-bold text-ivory-text mb-3">
+          1. The Flaw of Simplified Arcade Physics
+        </h2>
+        <p class="mb-4">
+          Most video games treat billiards cushions as simple mirror reflection lines (angle of incidence equals angle of reflection). In reality, snooker cushions are made of vulcanized rubber that compresses under impact, introduces severe tangential friction, and reacts violently to side-spin (English).
+        </p>
+        <p>
+          Similarly, balls do not simply roll; they slide across West-of-England wool baize, shedding reverse angular momentum through sliding friction before settling into pure rolling. Without these mathematical nuances, a simulator cannot teach authentic position play.
+        </p>
+      </div>
+
+      <div>
+        <h2 class="font-serif text-2xl font-bold text-ivory-text mb-3">
+          2. The Headless Architecture
+        </h2>
+        <p class="mb-4">
+          CueCraft's simulation core lives in a pure TypeScript physics engine completely decoupled from rendering frameworks. It runs in fixed sub-step intervals (&Delta;t = 1/120s) to guarantee numerical determinism, perfect momentum conservation, and zero sphere interpenetration.
+        </p>
+        <p>
+          Both our lightweight 2D HTML5 Canvas engine and our 3D Three.js PBR renderer act as visual consumers of this single physical truth.
+        </p>
+      </div>
+
+      <div>
+        <h2 class="font-serif text-2xl font-bold text-ivory-text mb-3">
+          3. Physical Constants & Championship Standards
+        </h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 my-6">
+          <div class="p-4 rounded-xl bg-surface-card border border-surface-subtle font-mono text-xs">
+            <span class="text-brass-primary block mb-1">TABLE DIMENSIONS</span>
+            <span class="text-ivory-text font-bold">3569 mm &times; 1778 mm</span>
+            <span class="text-ivory-faint block mt-1">Championship 12ft &times; 6ft</span>
+          </div>
+          <div class="p-4 rounded-xl bg-surface-card border border-surface-subtle font-mono text-xs">
+            <span class="text-brass-primary block mb-1">BALL SPECIFICATION</span>
+            <span class="text-ivory-text font-bold">52.5 mm &bull; 142 grams</span>
+            <span class="text-ivory-faint block mt-1">Aramith Phenolic Resin</span>
+          </div>
+          <div class="p-4 rounded-xl bg-surface-card border border-surface-subtle font-mono text-xs">
+            <span class="text-brass-primary block mb-1">CLOTH COEFFICIENT</span>
+            <span class="text-ivory-text font-bold">&mu;<sub>s</sub> = 0.22 &bull; &mu;<sub>r</sub> = 0.015</span>
+            <span class="text-ivory-faint block mt-1">Strachan No. 10 Baize</span>
+          </div>
+          <div class="p-4 rounded-xl bg-surface-card border border-surface-subtle font-mono text-xs">
+            <span class="text-brass-primary block mb-1">CUSHION RESTITUTION</span>
+            <span class="text-ivory-text font-bold">e<sub>c</sub> = 0.72 &bull; &mu;<sub>c</sub> = 0.20</span>
+            <span class="text-ivory-faint block mt-1">Vulcanized Championship Rubber</span>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h2 class="font-serif text-2xl font-bold text-ivory-text mb-3">
+          4. Centralized Identity & Rebranding
+        </h2>
+        <p>
+          All product names, copy strings, asset paths, and brand tokens are maintained in a centralized configuration layer (<code>src/config/site.ts</code> and <code>UI_DESIGN_SYSTEM.md</code>), ensuring that rebranding or packaging as white-label training software can be accomplished instantaneously.
+        </p>
+      </div>
+    </div>
+
+    {/* CTA */}
+    <div class="mt-14 pt-8 border-t border-surface-subtle flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div>
+        <span class="font-serif text-lg font-bold text-ivory-text block">
+          Experience the Difference
+        </span>
+        <span class="text-xs text-ivory-muted">
+          Step up to the championship table in your browser.
+        </span>
+      </div>
+      <a
+        href="/play"
+        class="px-6 py-3 rounded-xl bg-brass-primary text-surface-base font-bold text-xs uppercase tracking-wider hover:bg-brass-hover transition-all shadow-brass-glow"
+      >
+        Launch Table Simulator
+      </a>
+    </div>
+  </div>
+</BaseLayout>

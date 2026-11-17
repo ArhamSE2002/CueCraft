@@ -1,0 +1,225 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+export async function getStaticPaths() {
+  const articles = [
+    {
+      slug: 'cue-ball-control',
+      title: 'Understanding Cue-Ball Control & The Stun Shot',
+      category: 'Kinematics',
+      summary: 'Master the sliding-to-rolling friction transition, dead-stop stun shots, and the fundamental physics of potting without cue-ball drift.',
+      publishedDate: '2026-11-18',
+      content: `
+        <p class="lead text-base sm:text-lg text-ivory-muted leading-relaxed mb-6">
+          At its core, championship break-building is not about potting difficult balls; it is about ensuring that the next pot is trivially easy. That discipline is known as cue-ball control.
+        </p>
+
+        <h2 class="font-serif text-2xl font-bold text-ivory-text mt-8 mb-4">1. The Three States of Motion</h2>
+        <p class="text-sm text-ivory-muted leading-relaxed mb-4">
+          When struck with a cue tip, the cue ball does not immediately roll. Depending on where the tip strikes the ball's face, the sphere enters one of three physical regimes:
+        </p>
+        <ul class="list-disc list-inside space-y-2 text-sm text-ivory-muted mb-6">
+          <li><strong>Pure Sliding (Stun):</strong> The ball slides forward across the cloth without rotational motion (&omega; = 0).</li>
+          <li><strong>Reverse Sliding (Screw / Draw):</strong> The ball rotates backward (&omega; < 0) while translating forward.</li>
+          <li><strong>Forward Sliding to Rolling (Follow):</strong> The ball rotates forward faster than rolling velocity (&omega; > v/R).</li>
+        </ul>
+
+        <h2 class="font-serif text-2xl font-bold text-ivory-text mt-8 mb-4">2. The Mechanics of the Stun Shot</h2>
+        <p class="text-sm text-ivory-muted leading-relaxed mb-4">
+          A stun shot occurs when the cue ball arrives at the object ball in a state of <em>pure sliding</em> (or with near-zero angular spin). Because both spheres are made of identical phenolic resin with equal mass:
+        </p>
+        <div class="p-4 rounded-xl bg-surface-card border border-surface-subtle font-mono text-xs text-brass-primary my-4">
+          v'<sub>cue</sub> &middot; n = 0 &nbsp;&bull;&nbsp; v'<sub>object</sub> &middot; n = v<sub>cue</sub> &middot; n
+        </div>
+        <p class="text-sm text-ivory-muted leading-relaxed mb-4">
+          If the impact is full-ball (straight on), the cue ball transfers 100% of its linear momentum and stops dead in its tracks. If the shot is played at an angle, the cue ball is deflected along the exact 90-degree tangent line.
+        </p>
+
+        <h2 class="font-serif text-2xl font-bold text-ivory-text mt-8 mb-4">3. The Speed vs. Spin Trade-Off</h2>
+        <p class="text-sm text-ivory-muted leading-relaxed mb-6">
+          Because the baize cloth exerts continuous friction (&mu;<sub>s</sub> &approx; 0.22), backspin decays rapidly into a stun, which then transitions into pure forward rolling. To achieve a true stun shot over long distance, a player must strike the ball slightly below center with sufficient cue power so that the backspin cancels out right at the moment of contact.
+        </p>
+      `,
+    },
+    {
+      slug: 'side-spin-ballistics',
+      title: 'Side Spin, Swerve & Cushion Bite',
+      category: 'Rotational Dynamics',
+      summary: 'Understand running english versus check english, the physics of cue deflection (squirt), and how side spin modifies cushion rebound angles.',
+      publishedDate: '2026-11-18',
+      content: `
+        <p class="lead text-base sm:text-lg text-ivory-muted leading-relaxed mb-6">
+          Side spin—often called "English" or "check/running side"—is the most misunderstood phenomenon in cue sports. When applied correctly, it opens cushions and allows effortless escapes.
+        </p>
+
+        <h2 class="font-serif text-2xl font-bold text-ivory-text mt-8 mb-4">1. Running Side vs. Check Side</h2>
+        <p class="text-sm text-ivory-muted leading-relaxed mb-4">
+          The effect of side spin on a cushion depends on the direction the cue ball is traveling relative to the cushion rail:
+        </p>
+        <ul class="list-disc list-inside space-y-2 text-sm text-ivory-muted mb-6">
+          <li><strong>Running Side:</strong> The spin direction matches the direction of travel along the cushion. The spin assists the rebound, widening the exit angle and retaining velocity.</li>
+          <li><strong>Check Side:</strong> The spin direction opposes the direction of travel. The spinning ball bites into the rubber cushion, steepening the exit angle and severely checking forward speed.</li>
+        </ul>
+
+        <h2 class="font-serif text-2xl font-bold text-ivory-text mt-8 mb-4">2. Cue Squirt (Deflection)</h2>
+        <p class="text-sm text-ivory-muted leading-relaxed mb-6">
+          When striking the right side of the cue ball, the cue tip pushes the ball slightly to the left of the aiming line. This is known as squirt or cue deflection. Over long distances, players must compensate their aim point by a fraction of a millimeter.
+        </p>
+      `,
+    },
+    {
+      slug: 'cushion-rebounds',
+      title: 'Cushion Rebounds & Multi-Angle Escapes',
+      category: 'Geometry',
+      summary: 'The coefficient of normal restitution, tangent friction of rubber cushions, and systematic calculation of two- and three-cushion escape paths.',
+      publishedDate: '2026-11-18',
+      content: `
+        <p class="lead text-base sm:text-lg text-ivory-muted leading-relaxed mb-6">
+          Cushions in championship snooker are not perfect mathematical mirrors. Understanding energy loss and angle deflection is critical for escape shots.
+        </p>
+
+        <h2 class="font-serif text-2xl font-bold text-ivory-text mt-8 mb-4">1. Normal Restitution & Energy Loss</h2>
+        <p class="text-sm text-ivory-muted leading-relaxed mb-4">
+          Championship rubber cushions possess a coefficient of restitution between 0.68 and 0.75. This means normal velocity is reduced by roughly 30% upon each rebound:
+        </p>
+        <div class="p-4 rounded-xl bg-surface-card border border-surface-subtle font-mono text-xs text-brass-primary my-4">
+          v'<sub>n</sub> = -e<sub>c</sub> &middot; v<sub>n</sub> &nbsp;&bull;&nbsp; e<sub>c</sub> &approx; 0.72
+        </div>
+
+        <h2 class="font-serif text-2xl font-bold text-ivory-text mt-8 mb-4">2. Multi-Cushion Diamond System</h2>
+        <p class="text-sm text-ivory-muted leading-relaxed mb-6">
+          By dividing the table rails into proportional quadrants, players can calculate rebound trajectories for escaping tight snookers behind the baulk colors.
+        </p>
+      `,
+    },
+    {
+      slug: 'collision-angles',
+      title: 'Ball Collision Angles & The 90° Tangent Rule',
+      category: 'Collision Mechanics',
+      summary: 'Why frictionless equal-mass spheres separate at exactly 90 degrees, and how cut-induced throw imparts unexpected spin to object balls.',
+      publishedDate: '2026-11-18',
+      content: `
+        <p class="lead text-base sm:text-lg text-ivory-muted leading-relaxed mb-6">
+          In any elastic collision between two spheres of equal mass, the trajectory of the object ball always aligns with the line connecting their centers at the instant of impact.
+        </p>
+
+        <h2 class="font-serif text-2xl font-bold text-ivory-text mt-8 mb-4">1. The Line of Centers</h2>
+        <p class="text-sm text-ivory-muted leading-relaxed mb-4">
+          The line passing through the center of the ghost ball and the center of the object ball defines the normal vector. The object ball is launched precisely along this vector.
+        </p>
+
+        <h2 class="font-serif text-2xl font-bold text-ivory-text mt-8 mb-4">2. Cut-Induced Throw</h2>
+        <p class="text-sm text-ivory-muted leading-relaxed mb-6">
+          Because phenolic resin balls have slight surface friction, an angled cut shot will "throw" the object ball slightly away from the pure line of centers (typically 1 to 2 degrees on slow shots).
+        </p>
+      `,
+    },
+    {
+      slug: 'speed-and-distance',
+      title: 'Speed, Distance & Rolling Resistance',
+      category: 'Friction Dynamics',
+      summary: 'Calculating stopping distances on championship Strachan baize cloth based on initial cue impulse velocity.',
+      publishedDate: '2026-11-18',
+      content: `
+        <p class="lead text-base sm:text-lg text-ivory-muted leading-relaxed mb-6">
+          A ball rolling on championship Strachan No. 10 cloth experiences a nearly constant rolling deceleration of approximately 0.15 m/s².
+        </p>
+
+        <h2 class="font-serif text-2xl font-bold text-ivory-text mt-8 mb-4">1. Stopping Distance Formula</h2>
+        <p class="text-sm text-ivory-muted leading-relaxed mb-4">
+          From classical work-energy relations, the stopping distance is proportional to the square of initial strike velocity:
+        </p>
+        <div class="p-4 rounded-xl bg-surface-card border border-surface-subtle font-mono text-xs text-brass-primary my-4">
+          d = v<sub>0</sub><sup>2</sup> / (2 &middot; &mu;<sub>r</sub> &middot; g)
+        </div>
+        <p class="text-sm text-ivory-muted leading-relaxed mb-6">
+          Doubling shot power quadruples the distance the ball travels! Fine control over cue power is essential for featherweight position play.
+        </p>
+      `,
+    },
+    {
+      slug: 'topspin-and-backspin',
+      title: 'Topspin (Follow) and Backspin (Screw)',
+      category: 'Spin Ballistics',
+      summary: 'How vertical tip offset translates into angular torque, and why screw-back shots exhibit delayed backwards acceleration.',
+      publishedDate: '2026-11-18',
+      content: `
+        <p class="lead text-base sm:text-lg text-ivory-muted leading-relaxed mb-6">
+          The vertical position where the cue tip contacts the ball determines pitch angular momentum.
+        </p>
+
+        <h2 class="font-serif text-2xl font-bold text-ivory-text mt-8 mb-4">1. The Screw-Back Paradox</h2>
+        <p class="text-sm text-ivory-muted leading-relaxed mb-4">
+          Why does a screw shot move forward before suddenly reversing? While sliding across the cloth, the ball travels forward under linear momentum despite spinning backwards. Only when forward momentum is removed by impacting the object ball does the backspin bite and reverse the cue ball.
+        </p>
+      `,
+    },
+  ];
+
+  return articles.map((article) => ({
+    params: { slug: article.slug },
+    props: { article },
+  }));
+}
+
+const { article } = Astro.props;
+---
+
+<BaseLayout
+  title={`${article.title} — CueCraft Physics`}
+  description={article.summary}
+>
+  {/* JSON-LD Schema for SEO */}
+  <script type="application/ld+json" set:html={JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": article.title,
+    "description": article.summary,
+    "author": {
+      "@type": "Organization",
+      "name": "CueCraft Engineering Team"
+    },
+    "datePublished": article.publishedDate,
+    "inLanguage": "en"
+  })} />
+
+  <article class="max-w-4xl mx-auto px-4 sm:px-6 py-16">
+    {/* Navigation Breadcrumb */}
+    <div class="flex items-center gap-2 text-xs font-mono text-ivory-muted mb-8">
+      <a href="/learn" class="hover:text-brass-primary transition-colors">Learning Center</a>
+      <span>/</span>
+      <span class="text-brass-primary">{article.category}</span>
+    </div>
+
+    {/* Header */}
+    <header class="mb-10 pb-8 border-b border-surface-subtle">
+      <h1 class="font-serif text-3xl sm:text-5xl font-bold text-ivory-text leading-tight mb-4">
+        {article.title}
+      </h1>
+      <p class="text-sm sm:text-base text-ivory-muted leading-relaxed">
+        {article.summary}
+      </p>
+    </header>
+
+    {/* Content Body */}
+    <div class="prose prose-invert max-w-none text-ivory-text leading-relaxed" set:html={article.content} />
+
+    {/* Interactive Practice Callout */}
+    <div class="mt-14 p-6 sm:p-8 rounded-2xl bg-surface-card border border-surface-subtle flex flex-col sm:flex-row items-center justify-between gap-6 shadow-xl">
+      <div>
+        <h3 class="font-serif text-lg font-bold text-ivory-text mb-1">
+          Experiment with this shot live in the simulator
+        </h3>
+        <p class="text-xs text-ivory-muted">
+          Adjust cue-ball contact offset and watch trajectory lines calculate in real time.
+        </p>
+      </div>
+      <a
+        href="/play"
+        class="px-6 py-3 rounded-xl bg-brass-primary text-surface-base font-bold text-xs uppercase tracking-wider hover:bg-brass-hover transition-all shrink-0 shadow-brass-glow"
+      >
+        Launch Table Simulator
+      </a>
+    </div>
+  </article>
+</BaseLayout>
