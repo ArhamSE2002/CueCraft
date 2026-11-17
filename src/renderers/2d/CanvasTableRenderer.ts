@@ -19,6 +19,7 @@ export class CanvasTableRenderer {
   private scale: number = 1;
   private offsetX: number = 0;
   private offsetY: number = 0;
+  private currentZoom: number = 1;
 
   public options: RendererOptions = {
     showTrajectories: true,
@@ -34,7 +35,8 @@ export class CanvasTableRenderer {
     this.updateDpi();
   }
 
-  public updateDpi(): void {
+  public updateDpi(zoom: number = 1.0, panX: number = 0, panY: number = 0): void {
+    this.currentZoom = zoom;
     this.dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
     const rect = this.canvas.getBoundingClientRect();
     const w = rect.width || 1200;
@@ -45,17 +47,17 @@ export class CanvasTableRenderer {
     this.ctx.resetTransform();
     this.ctx.scale(this.dpr, this.dpr);
 
-    // Calculate scale factor and centering offsets to fit 3569 x 1778 mm table
-    // with 70mm wooden rail margin on all sides
-    const totalTableW = SnookerTable.LENGTH + 140;
-    const totalTableH = SnookerTable.WIDTH + 140;
+    // Calculate base scale factor and centering offsets to fit 3569 x 1778 mm table
+    const totalTableW = SnookerTable.LENGTH + 120;
+    const totalTableH = SnookerTable.WIDTH + 120;
 
     const scaleX = w / totalTableW;
     const scaleY = h / totalTableH;
-    this.scale = Math.min(scaleX, scaleY);
+    const baseScale = Math.min(scaleX, scaleY);
+    this.scale = baseScale * zoom;
 
-    this.offsetX = (w - SnookerTable.LENGTH * this.scale) / 2;
-    this.offsetY = (h - SnookerTable.WIDTH * this.scale) / 2;
+    this.offsetX = (w - SnookerTable.LENGTH * this.scale) / 2 + panX;
+    this.offsetY = (h - SnookerTable.WIDTH * this.scale) / 2 + panY;
   }
 
   /**
@@ -87,7 +89,9 @@ export class CanvasTableRenderer {
     prediction?: TrajectoryPrediction | null,
     aimAngleRad?: number,
     cuePowerPercent: number = 30,
-    isAiming: boolean = true
+    isAiming: boolean = true,
+    zoomLevel: number = 1.0,
+    panOffset: { x: number; y: number } = { x: 0, y: 0 }
   ): void {
     const ctx = this.ctx;
     const rect = this.canvas.getBoundingClientRect();
@@ -126,7 +130,7 @@ export class CanvasTableRenderer {
 
   private drawTableRails(table: SnookerTable): void {
     const ctx = this.ctx;
-    const margin = 55 * this.scale;
+    const margin = 50 * this.scale;
     const x0 = this.offsetX - margin;
     const y0 = this.offsetY - margin;
     const railW = SnookerTable.LENGTH * this.scale + margin * 2;
@@ -149,10 +153,10 @@ export class CanvasTableRenderer {
     ctx.stroke();
 
     // Inner rubber cushion frame
-    const cushionX = this.offsetX - 12 * this.scale;
-    const cushionY = this.offsetY - 12 * this.scale;
-    const cushionW = SnookerTable.LENGTH * this.scale + 24 * this.scale;
-    const cushionH = SnookerTable.WIDTH * this.scale + 24 * this.scale;
+    const cushionX = this.offsetX - 10 * this.scale;
+    const cushionY = this.offsetY - 10 * this.scale;
+    const cushionW = SnookerTable.LENGTH * this.scale + 20 * this.scale;
+    const cushionH = SnookerTable.WIDTH * this.scale + 20 * this.scale;
 
     ctx.fillStyle = '#06170E';
     ctx.fillRect(cushionX, cushionY, cushionW, cushionH);
@@ -243,7 +247,7 @@ export class CanvasTableRenderer {
   private drawTrajectories(prediction: TrajectoryPrediction): void {
     const ctx = this.ctx;
 
-    // 1. Cue Ball Aim Line
+    // 1. Cue Ball Aim Line (or Curved Swerve Line)
     for (const segment of prediction.cuePath) {
       const s = this.toScreen(segment.start);
       const e = this.toScreen(segment.end);
@@ -252,16 +256,24 @@ export class CanvasTableRenderer {
       ctx.moveTo(s.x, s.y);
       ctx.lineTo(e.x, e.y);
 
-      if (segment.type === 'cushion-reflection') {
-        ctx.strokeStyle = 'rgba(197, 160, 89, 0.6)'; // Brass colored reflection
+      if (segment.type === 'swerve') {
+        // Glowing cyan curved swerve trail
+        ctx.strokeStyle = '#2DD4BF';
+        ctx.lineWidth = 2.2 * this.scale;
+        ctx.stroke();
+      } else if (segment.type === 'cushion-reflection') {
+        ctx.strokeStyle = 'rgba(197, 160, 89, 0.7)';
         ctx.setLineDash([4 * this.scale, 4 * this.scale]);
+        ctx.lineWidth = 1.5 * this.scale;
+        ctx.stroke();
+        ctx.setLineDash([]);
       } else {
-        ctx.strokeStyle = 'rgba(247, 245, 238, 0.75)'; // Warm ivory aim line
+        ctx.strokeStyle = 'rgba(247, 245, 238, 0.75)';
         ctx.setLineDash([6 * this.scale, 3 * this.scale]);
+        ctx.lineWidth = 1.5 * this.scale;
+        ctx.stroke();
+        ctx.setLineDash([]);
       }
-      ctx.lineWidth = 1.5 * this.scale;
-      ctx.stroke();
-      ctx.setLineDash([]);
     }
 
     // 2. Ghost Ball
@@ -269,13 +281,12 @@ export class CanvasTableRenderer {
       const gp = this.toScreen(prediction.ghostBall);
       const r = SnookerTable.BALL_RADIUS * this.scale;
 
-      ctx.strokeStyle = '#2DD4BF'; // Chalk cyan ring
+      ctx.strokeStyle = '#2DD4BF';
       ctx.lineWidth = 1.8 * this.scale;
       ctx.beginPath();
       ctx.arc(gp.x, gp.y, r, 0, Math.PI * 2);
       ctx.stroke();
 
-      // Inner subtle target crosshair
       ctx.fillStyle = 'rgba(45, 212, 191, 0.15)';
       ctx.fill();
     }
@@ -285,14 +296,13 @@ export class CanvasTableRenderer {
       const s = this.toScreen(segment.start);
       const e = this.toScreen(segment.end);
 
-      ctx.strokeStyle = '#EF4444'; // Red trajectory arrow
+      ctx.strokeStyle = '#EF4444';
       ctx.lineWidth = 2 * this.scale;
       ctx.beginPath();
       ctx.moveTo(s.x, s.y);
       ctx.lineTo(e.x, e.y);
       ctx.stroke();
 
-      // Arrow head
       this.drawArrowHead(s, e, '#EF4444');
     }
 
@@ -301,7 +311,7 @@ export class CanvasTableRenderer {
       const s = this.toScreen(segment.start);
       const e = this.toScreen(segment.end);
 
-      ctx.strokeStyle = '#38BDF8'; // Blue deflection vector
+      ctx.strokeStyle = '#38BDF8';
       ctx.lineWidth = 1.8 * this.scale;
       ctx.setLineDash([3 * this.scale, 3 * this.scale]);
       ctx.beginPath();
@@ -318,7 +328,7 @@ export class CanvasTableRenderer {
     const r = ball.radius * this.scale;
     const info = ball.colorInfo;
 
-    // Drop shadow (offset toward bottom-right from overhead light)
+    // Drop shadow
     ctx.fillStyle = 'rgba(2, 8, 4, 0.45)';
     ctx.beginPath();
     ctx.ellipse(p.x + r * 0.25, p.y + r * 0.3, r * 1.05, r * 0.85, 0, 0, Math.PI * 2);
@@ -342,7 +352,7 @@ export class CanvasTableRenderer {
     ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
     ctx.fill();
 
-    // Specular highlight spot (overhead canopy reflection)
+    // Specular highlight spot
     ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
     ctx.beginPath();
     ctx.arc(p.x - r * 0.3, p.y - r * 0.3, r * 0.22, 0, Math.PI * 2);
@@ -350,7 +360,7 @@ export class CanvasTableRenderer {
 
     // Cue ball spin indicator dot
     if (ball.type === 'cue' && (Math.abs(ball.spin.pitch) > 1 || Math.abs(ball.spin.yaw) > 1)) {
-      ctx.fillStyle = 'rgba(239, 68, 68, 0.7)';
+      ctx.fillStyle = 'rgba(239, 68, 68, 0.8)';
       ctx.beginPath();
       ctx.arc(p.x, p.y, r * 0.2, 0, Math.PI * 2);
       ctx.fill();
@@ -362,13 +372,12 @@ export class CanvasTableRenderer {
     const p = this.toScreen(cueBall.position);
     const r = cueBall.radius * this.scale;
 
-    // Pullback offset based on shot power (0% = 12mm away, 100% = 75mm away)
+    // Pullback offset based on shot power
     const pullback = (12 + (powerPercent / 100) * 65) * this.scale;
     const cueLength = 480 * this.scale;
     const tipWidth = 5 * this.scale;
     const buttWidth = 14 * this.scale;
 
-    // Cue stick extends backwards along opposite of aim angle
     const backAngle = aimAngleRad + Math.PI;
     const tipX = p.x + Math.cos(backAngle) * (r + pullback);
     const tipY = p.y + Math.sin(backAngle) * (r + pullback);
@@ -378,7 +387,6 @@ export class CanvasTableRenderer {
 
     const normal = new Vector2D(-Math.sin(backAngle), Math.cos(backAngle));
 
-    // Cue stick polygon
     ctx.beginPath();
     ctx.moveTo(tipX + normal.x * (tipWidth / 2), tipY + normal.y * (tipWidth / 2));
     ctx.lineTo(buttX + normal.x * (buttWidth / 2), buttY + normal.y * (buttWidth / 2));
@@ -386,25 +394,23 @@ export class CanvasTableRenderer {
     ctx.lineTo(tipX - normal.x * (tipWidth / 2), tipY - normal.y * (tipWidth / 2));
     ctx.closePath();
 
-    // Ash wood grain gradient
     const cueGrad = ctx.createLinearGradient(tipX, tipY, buttX, buttY);
-    cueGrad.addColorStop(0, '#E6D3AC'); // Ash wood near tip
+    cueGrad.addColorStop(0, '#E6D3AC');
     cueGrad.addColorStop(0.3, '#C49E65');
-    cueGrad.addColorStop(0.75, '#522E14'); // Dark maple
-    cueGrad.addColorStop(1, '#1A0E06'); // Ebony butt
+    cueGrad.addColorStop(0.75, '#522E14');
+    cueGrad.addColorStop(1, '#1A0E06');
 
     ctx.fillStyle = cueGrad;
     ctx.fill();
 
     // Brass ferrule & blue chalk tip
-    ctx.strokeStyle = '#C5A059'; // Brass ferrule
+    ctx.strokeStyle = '#C5A059';
     ctx.lineWidth = 3 * this.scale;
     ctx.beginPath();
     ctx.moveTo(tipX + normal.x * (tipWidth / 2), tipY + normal.y * (tipWidth / 2));
     ctx.lineTo(tipX - normal.x * (tipWidth / 2), tipY - normal.y * (tipWidth / 2));
     ctx.stroke();
 
-    // Blue chalk tip
     ctx.strokeStyle = '#2563EB';
     ctx.lineWidth = 2 * this.scale;
     const chalkX = tipX - Math.cos(backAngle) * (2 * this.scale);

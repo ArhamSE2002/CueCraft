@@ -40,6 +40,12 @@ export class Ball {
   // yaw: Left (-) / Right (+) side-spin around vertical axis
   public spin: { pitch: number; yaw: number };
 
+  // 3D rotation angles for realistic visual roll
+  public rotation: { x: number; y: number; z: number };
+
+  // Swerve force from elevated cue strikes (masse)
+  public swerveForce: number = 0;
+
   public radius: number;
   public mass: number; // in kg (0.142 kg regulation)
   public potted: boolean;
@@ -51,6 +57,7 @@ export class Ball {
     this.position = position;
     this.velocity = Vector2D.zero();
     this.spin = { pitch: 0, yaw: 0 };
+    this.rotation = { x: 0, y: 0, z: 0 };
     this.radius = SnookerTable.BALL_RADIUS;
     this.mass = 0.142;
     this.potted = false;
@@ -71,12 +78,26 @@ export class Ball {
   stop(): void {
     this.velocity = Vector2D.zero();
     this.spin = { pitch: 0, yaw: 0 };
+    this.swerveForce = 0;
+  }
+
+  /**
+   * Updates 3D visual rotation angles based on displacement and spin.
+   */
+  updateRotation(deltaPos: Vector2D, dt: number): void {
+    const R = this.radius;
+    // Rolling on table plane: X corresponds to table length, Y corresponds to table width
+    this.rotation.z -= deltaPos.x / R;
+    this.rotation.x += deltaPos.y / R;
+    this.rotation.y += this.spin.yaw * dt;
   }
 
   clone(): Ball {
     const copy = new Ball(this.id, this.type, this.position.clone());
     copy.velocity = this.velocity.clone();
     copy.spin = { ...this.spin };
+    copy.rotation = { ...this.rotation };
+    copy.swerveForce = this.swerveForce;
     copy.radius = this.radius;
     copy.mass = this.mass;
     copy.potted = this.potted;

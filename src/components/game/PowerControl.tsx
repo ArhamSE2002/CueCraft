@@ -13,9 +13,9 @@ export const PowerControl: React.FC = () => {
   ];
 
   return (
-    <div className="flex flex-col bg-surface-card border border-surface-subtle p-3 rounded-xl shadow-lg w-full max-w-[210px]">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs uppercase tracking-wider font-semibold text-brass-primary flex items-center gap-1">
+    <div className="flex flex-col bg-surface-card border border-surface-subtle p-2.5 rounded-xl shadow-lg w-full max-w-[210px]">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[11px] uppercase tracking-wider font-semibold text-brass-primary flex items-center gap-1">
           <Zap className="w-3.5 h-3.5 text-brass-primary" />
           Cue Power
         </span>

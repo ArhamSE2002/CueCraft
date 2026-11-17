@@ -7,6 +7,7 @@ interface Props {
   description?: string;
   canonical?: string;
   image?: string;
+  noFooter?: boolean;
 }
 
 const {
@@ -14,6 +15,7 @@ const {
   description = siteConfig.description,
   canonical = Astro.url.href,
   image = '/og-image.png',
+  noFooter = false,
 } = Astro.props;
 
 const pageTitle = title === siteConfig.name ? `${siteConfig.name} — ${siteConfig.tagline}` : `${title} | ${siteConfig.name}`;
@@ -58,10 +60,16 @@ const currentPath = Astro.url.pathname;
     />
   </head>
 
-  <body class="bg-surface-base text-ivory-text min-h-screen flex flex-col antialiased selection:bg-brass-primary selection:text-surface-base">
+  <body class={`bg-surface-base text-ivory-text antialiased selection:bg-brass-primary selection:text-surface-base ${
+    noFooter ? 'h-screen max-h-screen overflow-hidden flex flex-col' : 'min-h-screen flex flex-col'
+  }`}>
     {/* Global Navigation Bar */}
-    <header class="sticky top-0 z-50 w-full bg-surface-base/90 backdrop-blur-md border-b border-surface-subtle">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+    <header class={`sticky top-0 z-50 w-full bg-surface-base/95 backdrop-blur-md border-b border-surface-subtle ${
+      noFooter ? 'h-12' : 'h-16'
+    }`}>
+      <div class={`max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between ${
+        noFooter ? 'h-12' : 'h-16'
+      }`}>
         {/* Brand Crest */}
         <a href="/" class="flex items-center gap-2.5 group">
           <div class="w-8 h-8 rounded-lg bg-felt-surface border border-brass-primary/40 flex items-center justify-center shadow-sm group-hover:border-brass-primary transition-colors">
@@ -113,85 +121,87 @@ const currentPath = Astro.url.pathname;
     </header>
 
     {/* Page Main Slot */}
-    <main class="flex-1">
+    <main class={noFooter ? 'flex-1 min-h-0 overflow-hidden flex flex-col' : 'flex-1'}>
       <slot />
     </main>
 
     {/* Global Refined British Club Footer */}
-    <footer class="w-full bg-surface-card border-t border-surface-subtle mt-24">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 py-14">
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-10 mb-12">
-          {/* Brand Philosophy */}
-          <div class="md:col-span-2 flex flex-col gap-3">
-            <div class="flex items-center gap-2">
-              <span class="w-2.5 h-2.5 rounded-full bg-brass-primary" />
-              <span class="font-serif text-lg font-bold tracking-wide text-ivory-text">
-                {siteConfig.name}
+    {!noFooter && (
+      <footer class="w-full bg-surface-card border-t border-surface-subtle mt-24">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 py-14">
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-10 mb-12">
+            {/* Brand Philosophy */}
+            <div class="md:col-span-2 flex flex-col gap-3">
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-brass-primary" />
+                <span class="font-serif text-lg font-bold tracking-wide text-ivory-text">
+                  {siteConfig.name}
+                </span>
+              </div>
+              <p class="text-xs text-ivory-muted leading-relaxed max-w-md">
+                A high-precision snooker simulation and learning platform engineered to decode the physics of cue ball control, spin ballistics, and cushion rebound angles. Built on first-principles classical mechanics.
+              </p>
+              <div class="flex items-center gap-2 mt-2 text-xs font-mono text-brass-muted">
+                <span>Strachan No. 10 Baize</span>
+                <span>&bull;</span>
+                <span>Phenolic Resin Specs</span>
+                <span>&bull;</span>
+                <span>Deterministic Engine</span>
+              </div>
+            </div>
+
+            {/* Platform Destinations */}
+            <div class="flex flex-col gap-2.5">
+              <span class="text-xs font-semibold uppercase tracking-wider text-brass-primary">
+                Platform
               </span>
+              <a href="/play" class="text-xs text-ivory-muted hover:text-ivory-text transition-colors">
+                Interactive 2D/3D Simulator
+              </a>
+              <a href="/learn" class="text-xs text-ivory-muted hover:text-ivory-text transition-colors">
+                The Science of Snooker
+              </a>
+              <a href="/lessons" class="text-xs text-ivory-muted hover:text-ivory-text transition-colors">
+                Structured Lessons
+              </a>
+              <a href="/about" class="text-xs text-ivory-muted hover:text-ivory-text transition-colors">
+                Platform Architecture
+              </a>
             </div>
-            <p class="text-xs text-ivory-muted leading-relaxed max-w-md">
-              A high-precision snooker simulation and learning platform engineered to decode the physics of cue ball control, spin ballistics, and cushion rebound angles. Built on first-principles classical mechanics.
-            </p>
-            <div class="flex items-center gap-2 mt-2 text-xs font-mono text-brass-muted">
-              <span>Strachan No. 10 Baize</span>
-              <span>&bull;</span>
-              <span>Phenolic Resin Specs</span>
-              <span>&bull;</span>
-              <span>Deterministic Engine</span>
+
+            {/* Educational Topics */}
+            <div class="flex flex-col gap-2.5">
+              <span class="text-xs font-semibold uppercase tracking-wider text-brass-primary">
+                Physics Topics
+              </span>
+              <a href="/learn/cue-ball-control" class="text-xs text-ivory-muted hover:text-ivory-text transition-colors">
+                Cue Ball Control & Stun
+              </a>
+              <a href="/learn/side-spin-ballistics" class="text-xs text-ivory-muted hover:text-ivory-text transition-colors">
+                Running vs Check Side
+              </a>
+              <a href="/learn/cushion-rebounds" class="text-xs text-ivory-muted hover:text-ivory-text transition-colors">
+                Cushion Restitution Dynamics
+              </a>
+              <a href="/learn/collision-angles" class="text-xs text-ivory-muted hover:text-ivory-text transition-colors">
+                The 90-Degree Tangent Line
+              </a>
             </div>
           </div>
 
-          {/* Platform Destinations */}
-          <div class="flex flex-col gap-2.5">
-            <span class="text-xs font-semibold uppercase tracking-wider text-brass-primary">
-              Platform
-            </span>
-            <a href="/play" class="text-xs text-ivory-muted hover:text-ivory-text transition-colors">
-              Interactive 2D/3D Simulator
-            </a>
-            <a href="/learn" class="text-xs text-ivory-muted hover:text-ivory-text transition-colors">
-              The Science of Snooker
-            </a>
-            <a href="/lessons" class="text-xs text-ivory-muted hover:text-ivory-text transition-colors">
-              Structured Lessons
-            </a>
-            <a href="/about" class="text-xs text-ivory-muted hover:text-ivory-text transition-colors">
-              Platform Architecture
-            </a>
-          </div>
-
-          {/* Educational Topics */}
-          <div class="flex flex-col gap-2.5">
-            <span class="text-xs font-semibold uppercase tracking-wider text-brass-primary">
-              Physics Topics
-            </span>
-            <a href="/learn/cue-ball-control" class="text-xs text-ivory-muted hover:text-ivory-text transition-colors">
-              Cue Ball Control & Stun
-            </a>
-            <a href="/learn/side-spin-ballistics" class="text-xs text-ivory-muted hover:text-ivory-text transition-colors">
-              Running vs Check Side
-            </a>
-            <a href="/learn/cushion-rebounds" class="text-xs text-ivory-muted hover:text-ivory-text transition-colors">
-              Cushion Restitution Dynamics
-            </a>
-            <a href="/learn/collision-angles" class="text-xs text-ivory-muted hover:text-ivory-text transition-colors">
-              The 90-Degree Tangent Line
-            </a>
+          {/* Sub-footer */}
+          <div class="pt-8 border-t border-surface-subtle flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-mono text-ivory-faint">
+            <div>
+              &copy; {new Date().getFullYear()} {siteConfig.name}. All rights reserved.
+            </div>
+            <div class="flex items-center gap-4">
+              <a href="/about" class="hover:text-ivory-text transition-colors">Architecture</a>
+              <a href="/learn" class="hover:text-ivory-text transition-colors">Curriculum</a>
+              <a href="/play" class="hover:text-brass-primary transition-colors text-brass-muted font-bold">Play Now</a>
+            </div>
           </div>
         </div>
-
-        {/* Sub-footer */}
-        <div class="pt-8 border-t border-surface-subtle flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-mono text-ivory-faint">
-          <div>
-            &copy; {new Date().getFullYear()} {siteConfig.name}. All rights reserved.
-          </div>
-          <div class="flex items-center gap-4">
-            <a href="/about" class="hover:text-ivory-text transition-colors">Architecture</a>
-            <a href="/learn" class="hover:text-ivory-text transition-colors">Curriculum</a>
-            <a href="/play" class="hover:text-brass-primary transition-colors text-brass-muted font-bold">Play Now</a>
-          </div>
-        </div>
-      </div>
-    </footer>
+      </footer>
+    )}
   </body>
 </html>

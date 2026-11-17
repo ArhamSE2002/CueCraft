@@ -8,7 +8,7 @@ import { Cushions } from './Cushions';
 export interface TrajectorySegment {
   start: Vector2D;
   end: Vector2D;
-  type: 'cue' | 'target' | 'cue-deflection' | 'cushion-reflection';
+  type: 'cue' | 'target' | 'cue-deflection' | 'cushion-reflection' | 'swerve';
 }
 
 export interface TrajectoryPrediction {
@@ -19,6 +19,13 @@ export interface TrajectoryPrediction {
   cueDeflectionPath: TrajectorySegment[];
   cushionHit: Vector2D | null;
   angleDegrees: number; // Cut angle in degrees
+  isCurvedSwerve?: boolean;
+}
+
+export interface FoulEvent {
+  type: 'in-off' | 'miss' | 'wrong-ball';
+  penalty: number;
+  message: string;
 }
 
 export class PhysicsEngine {
@@ -27,6 +34,7 @@ export class PhysicsEngine {
   public isSimulating: boolean = false;
   public onBallPotted?: (ball: Ball, pocket: Pocket) => void;
   public onCollision?: (event: CollisionEvent) => void;
+  public onFoul?: (foul: FoulEvent) => void;
 
   constructor() {
     this.table = new SnookerTable();
@@ -47,36 +55,50 @@ export class PhysicsEngine {
 
   /**
    * Applies strike impulse to the cue ball.
-   * @param power Percentage from 0 to 100
+   * @param power Percentage from 2 to 100
    * @param angleRad Direction angle in radians
-   * @param spinX Horizontal tip offset (-1 = left, +1 = right)
+   * @param spinX Horizontal tip offset (-1 = left, +1 = right english)
    * @param spinY Vertical tip offset (-1 = screw/backspin, +1 = follow/topspin)
+   * @param cueElevationDeg Butt elevation angle (0° = level to 70° = masse)
    */
   public strikeCueBall(
     power: number,
     angleRad: number,
     spinX: number = 0,
-    spinY: number = 0
+    spinY: number = 0,
+    cueElevationDeg: number = 0
   ): boolean {
     const cue = this.cueBall;
     if (!cue || cue.potted || !this.isStationary()) {
       return false;
     }
 
-    // Power mapping: 0% - 100% -> 600 mm/s to 6500 mm/s
+    // Power mapping: 2% - 100% -> 600 mm/s to 6500 mm/s
     const clampedPower = Math.max(2, Math.min(100, power));
-    const speed = 600 + (clampedPower / 100) * 5800; // mm/s
+    let speed = 600 + (clampedPower / 100) * 5800; // mm/s
+
+    // Butt elevation downforce factor
+    const elevationRad = (Math.max(0, Math.min(75, cueElevationDeg)) * Math.PI) / 180;
+    const forwardEfficiency = Math.cos(elevationRad); // Downward strike absorbs some forward speed
+    speed *= Math.max(0.4, forwardEfficiency);
 
     cue.velocity = Vector2D.fromAngle(angleRad, speed);
 
     // Spin mapping
-    // spinY: +1 (topspin) -> +speed/R * 1.5; -1 (backspin) -> -speed/R * 2.0
-    const clampedSpinX = Math.max(-1, Math.min(1, spinX));
-    const clampedSpinY = Math.max(-1, Math.min(1, spinY));
+    const clampedSpinX = Math.max(-0.85, Math.min(0.85, spinX));
+    const clampedSpinY = Math.max(-0.85, Math.min(0.85, spinY));
 
     const pitchMultiplier = clampedSpinY < 0 ? 2.2 : 1.6;
     cue.spin.pitch = clampedSpinY * (speed / cue.radius) * pitchMultiplier;
     cue.spin.yaw = clampedSpinX * 35; // rad/s side spin
+
+    // Swerve dynamics: Elevated cue + side spin exerts persistent lateral force on cloth
+    if (cueElevationDeg > 2 && Math.abs(clampedSpinX) > 0.05) {
+      // Swerve force perpendicular to travel
+      cue.swerveForce = Math.sin(elevationRad) * clampedSpinX * (150 + speed * 0.12);
+    } else {
+      cue.swerveForce = 0;
+    }
 
     this.isSimulating = true;
     return true;
@@ -90,10 +112,26 @@ export class PhysicsEngine {
     const subDt = dt / subSteps;
 
     for (let s = 0; s < subSteps; s++) {
-      // 1. Move balls
+      // 1. Move balls & apply swerve mechanics
       for (const ball of this.balls) {
         if (ball.potted) continue;
-        ball.position = ball.position.add(ball.velocity.scale(subDt));
+
+        // Apply swerve curve if cue ball was struck with elevation + side spin
+        if (ball.type === 'cue' && Math.abs(ball.swerveForce) > 1) {
+          const speed = ball.velocity.length();
+          if (speed > 100) {
+            const perp = ball.velocity.perpendicular().normalize();
+            ball.velocity = ball.velocity.add(perp.scale(ball.swerveForce * subDt));
+            // Swerve force decays as ball bites and transitions to roll
+            ball.swerveForce *= Math.pow(0.965, subDt * 120);
+          } else {
+            ball.swerveForce = 0;
+          }
+        }
+
+        const deltaPos = ball.velocity.scale(subDt);
+        ball.position = ball.position.add(deltaPos);
+        ball.updateRotation(deltaPos, subDt);
       }
 
       // 2. Ball-cushion collisions
@@ -115,17 +153,34 @@ export class PhysicsEngine {
         }
       }
 
-      // 4. Pocket detection
+      // 4. Pocket detection & Foul Handling
       for (const ball of this.balls) {
         if (ball.potted) continue;
         for (const pocket of this.table.pockets) {
           const distToPocket = ball.position.distanceTo(pocket.position);
           if (distToPocket <= pocket.radius) {
-            ball.potted = true;
-            ball.pottedInPocket = pocket.id;
-            ball.stop();
-            if (this.onBallPotted) {
-              this.onBallPotted(ball, pocket);
+            if (ball.type === 'cue') {
+              // FOUL: In-off (Cue ball pocketed)
+              ball.stop();
+              // In snooker rules: Cue ball potted is a foul (minimum 4 points penalty)
+              // and the ball is returned in-hand inside the "D"
+              this.placeCueBall(new Vector2D(737, SnookerTable.WIDTH / 2));
+              
+              if (this.onFoul) {
+                this.onFoul({
+                  type: 'in-off',
+                  penalty: 4,
+                  message: `FOUL: In-off into ${pocket.name}. Penalty: -4 points. Cue ball placed in the 'D'.`,
+                });
+              }
+            } else {
+              // Valid object ball pot
+              ball.potted = true;
+              ball.pottedInPocket = pocket.id;
+              ball.stop();
+              if (this.onBallPotted) {
+                this.onBallPotted(ball, pocket);
+              }
             }
             break;
           }
@@ -145,10 +200,15 @@ export class PhysicsEngine {
 
   /**
    * Predicts trajectory rays, ghost ball position, and deflection angles.
+   * Line lengths dynamically scale with cue power.
+   * If cue butt is elevated with side spin, computes curved swerve prediction.
    */
   public calculateTrajectory(
     angleRad: number,
-    maxDistance: number = 4000
+    power: number = 35,
+    spinX: number = 0,
+    spinY: number = 0,
+    cueElevationDeg: number = 0
   ): TrajectoryPrediction {
     const cue = this.cueBall;
     const prediction: TrajectoryPrediction = {
@@ -159,15 +219,50 @@ export class PhysicsEngine {
       cueDeflectionPath: [],
       cushionHit: null,
       angleDegrees: 0,
+      isCurvedSwerve: false,
     };
 
     if (!cue || cue.potted) return prediction;
 
-    const rayDir = Vector2D.fromAngle(angleRad, 1);
+    // Line length scales directly with cue power:
+    // 2% power -> ~400 mm
+    // 50% power -> ~2200 mm
+    // 100% power -> ~4000 mm (full table length)
+    const effectivePower = Math.max(5, Math.min(100, power));
+    const maxLookaheadDist = 400 + (effectivePower / 100) * 3600;
+
     const startPos = cue.position;
 
+    // Check if curved swerve trajectory (masse shot)
+    if (cueElevationDeg > 5 && Math.abs(spinX) > 0.08) {
+      prediction.isCurvedSwerve = true;
+      const elevationRad = (cueElevationDeg * Math.PI) / 180;
+      const swerveStrength = Math.sin(elevationRad) * spinX * 0.45;
+
+      let currentPos = startPos;
+      let currentAngle = angleRad;
+      const stepDist = 40;
+      const totalSteps = Math.min(50, Math.floor(maxLookaheadDist / stepDist));
+
+      for (let i = 0; i < totalSteps; i++) {
+        // Curve direction
+        currentAngle += swerveStrength * 0.08 * Math.max(0.2, 1 - i / totalSteps);
+        const nextPos = currentPos.add(Vector2D.fromAngle(currentAngle, stepDist));
+
+        prediction.cuePath.push({
+          start: currentPos,
+          end: nextPos,
+          type: 'swerve',
+        });
+        currentPos = nextPos;
+      }
+      return prediction;
+    }
+
+    const rayDir = Vector2D.fromAngle(angleRad, 1);
+
     // Check intersection with all active non-cue balls
-    let closestBallDist = Infinity;
+    let closestBallDist = maxLookaheadDist;
     let hitBall: Ball | null = null;
     let ghostPos: Vector2D | null = null;
 
@@ -212,17 +307,20 @@ export class PhysicsEngine {
       const cutCos = Math.max(-1, Math.min(1, rayDir.dot(normal)));
       prediction.angleDegrees = Math.acos(cutCos) * (180 / Math.PI);
 
-      // Target ball path: projects along normal
-      const targetEnd = hitBall.position.add(normal.scale(700));
+      // Target ball path: length scales with power and cut angle
+      const targetDist = Math.max(150, (effectivePower / 100) * 2200 * cutCos);
+      const targetEnd = hitBall.position.add(normal.scale(targetDist));
       prediction.targetPath.push({
         start: hitBall.position,
         end: targetEnd,
         type: 'target',
       });
 
-      // Cue ball deflection: projects along tangent
+      // Cue ball deflection: length scales with power and remaining tangential speed
+      const sinCut = Math.sin(Math.acos(cutCos));
+      const deflectionDist = Math.max(120, (effectivePower / 100) * 1600 * Math.max(0.2, sinCut));
       const deflectionDir = tangent.scale(Math.sign(rayDir.dot(tangent)) || 1);
-      const cueDeflectionEnd = ghostPos.add(deflectionDir.scale(500));
+      const cueDeflectionEnd = ghostPos.add(deflectionDir.scale(deflectionDist));
       prediction.cueDeflectionPath.push({
         start: ghostPos,
         end: cueDeflectionEnd,
@@ -232,13 +330,12 @@ export class PhysicsEngine {
       return prediction;
     }
 
-    // If no ball was hit, raycast against table cushions
-    let closestCushionDist = maxDistance;
+    // If no ball was hit, raycast against table cushions within power distance
+    let closestCushionDist = maxLookaheadDist;
     let cushionHitPoint: Vector2D | null = null;
     let cushionNormal: Vector2D | null = null;
 
     for (const cushion of this.table.cushions) {
-      // Ray-line segment intersection
       const p1 = cushion.start;
       const p2 = cushion.end;
       const v1 = startPos.sub(p1);
@@ -266,10 +363,11 @@ export class PhysicsEngine {
       });
       prediction.cushionHit = cushionHitPoint;
 
-      // Reflected ray
+      // Reflected ray (length scales with remaining power)
+      const remainingDist = Math.max(100, (maxLookaheadDist - closestCushionDist) * 0.72);
       const incidentNormal = rayDir.dot(cushionNormal);
       const reflectDir = rayDir.sub(cushionNormal.scale(2 * incidentNormal)).normalize();
-      const reflectEnd = cushionHitPoint.add(reflectDir.scale(600));
+      const reflectEnd = cushionHitPoint.add(reflectDir.scale(remainingDist));
 
       prediction.cuePath.push({
         start: cushionHitPoint,
@@ -277,10 +375,10 @@ export class PhysicsEngine {
         type: 'cushion-reflection',
       });
     } else {
-      // Open table ray
+      // Free open ray: length proportional to shot power
       prediction.cuePath.push({
         start: startPos,
-        end: startPos.add(rayDir.scale(maxDistance)),
+        end: startPos.add(rayDir.scale(maxLookaheadDist)),
         type: 'cue',
       });
     }
@@ -289,33 +387,25 @@ export class PhysicsEngine {
   }
 
   /**
-   * Sets up practice scenario with cue ball in baulk and 3 object balls
-   * (Red near black spot, Red in center, Black on spot).
+   * Sets up practice scenario.
    */
   public setupPracticeRack(): void {
     this.balls = [
-      // Cue ball on baulk line
       new Ball('cue', 'cue', new Vector2D(737, SnookerTable.WIDTH / 2)),
-      // Red 1: Center line shot
       new Ball('red-1', 'red', new Vector2D(2200, SnookerTable.WIDTH / 2)),
-      // Red 2: Angled cut shot
       new Ball('red-2', 'red', new Vector2D(2700, SnookerTable.WIDTH / 2 + 250)),
-      // Black ball on spot
       new Ball('black', 'black', SnookerTable.SPOTS.BLACK.clone()),
-      // Blue ball on center spot
       new Ball('blue', 'blue', SnookerTable.SPOTS.BLUE.clone()),
     ];
     this.isSimulating = false;
   }
 
   /**
-   * Sets up official championship 22-ball rack.
+   * Sets up championship 22-ball rack.
    */
   public setupChampionshipRack(): void {
     this.balls = [
-      // Cue ball in "D"
       new Ball('cue', 'cue', new Vector2D(737, SnookerTable.WIDTH / 2 - 120)),
-      // 6 Colors on official spots
       new Ball('yellow', 'yellow', SnookerTable.SPOTS.YELLOW.clone()),
       new Ball('green', 'green', SnookerTable.SPOTS.GREEN.clone()),
       new Ball('brown', 'brown', SnookerTable.SPOTS.BROWN.clone()),
@@ -324,13 +414,10 @@ export class PhysicsEngine {
       new Ball('black', 'black', SnookerTable.SPOTS.BLACK.clone()),
     ];
 
-    // 15 Reds in triangle behind Pink spot
-    // Apex of red triangle is placed just behind Pink spot
     const apexX = SnookerTable.SPOTS.PINK.x + SnookerTable.BALL_DIAMETER + 3;
     const centerY = SnookerTable.WIDTH / 2;
-    const r = SnookerTable.BALL_RADIUS;
     const d = SnookerTable.BALL_DIAMETER;
-    const dx = d * Math.cos(Math.PI / 6); // row horizontal spacing
+    const dx = d * Math.cos(Math.PI / 6);
 
     let redId = 1;
     for (let row = 0; row < 5; row++) {
@@ -346,7 +433,7 @@ export class PhysicsEngine {
   }
 
   /**
-   * Reposition cue ball in hand (e.g. within "D" or practice table spot).
+   * Reposition cue ball in hand (e.g. within "D").
    */
   public placeCueBall(position: Vector2D): void {
     let cue = this.cueBall;
@@ -357,6 +444,7 @@ export class PhysicsEngine {
       cue.position = position;
       cue.velocity = Vector2D.zero();
       cue.spin = { pitch: 0, yaw: 0 };
+      cue.swerveForce = 0;
       cue.potted = false;
       cue.pottedInPocket = null;
     }
