@@ -65,7 +65,7 @@ export const GameShell: React.FC = () => {
   } = useGameStore();
 
   const [cutAngleDeg, setCutAngleDeg] = useState<number>(0);
-  const [threeCameraMode, setThreeCameraMode] = useState<'tactical' | 'overhead' | 'orbit'>('overhead');
+  const [threeCameraMode, setThreeCameraMode] = useState<'tactical' | 'overhead' | 'orbit'>('tactical');
   const [lastShotSummary, setLastShotSummary] = useState<string | null>(
     'Drag on table to aim · Space to strike · ? for shortcuts'
   );
@@ -75,6 +75,23 @@ export const GameShell: React.FC = () => {
 
   // ── Initialize engine & 2D renderer ─────────────────────────────────────────
   useEffect(() => {
+    // Check URL parameters (e.g. /play?mode=3d or /play?rack=championship)
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const urlMode = params.get('mode');
+      if (urlMode === '3d' || urlMode === '2d') {
+        setRenderMode(urlMode);
+      }
+      const urlCam = params.get('cam') || params.get('camera');
+      if (urlCam === 'tactical' || urlCam === 'overhead' || urlCam === 'orbit') {
+        setThreeCameraMode(urlCam as any);
+      }
+      const urlRack = params.get('rack');
+      if (urlRack === 'championship' || urlRack === 'practice') {
+        setGameMode(urlRack);
+      }
+    }
+
     if (!canvasRef.current) return;
 
     const engine = new PhysicsEngine();
@@ -127,8 +144,11 @@ export const GameShell: React.FC = () => {
           const renderer = new ThreeTableRenderer(threeContainerRef.current);
           renderer.viewMode = threeCameraMode;
           renderer.zoom = zoomLevel;
+          renderer.onAimAdjust = (delta) => adjustAimAngleRad(delta);
           threeRendererRef.current = renderer;
         });
+      } else {
+        threeRendererRef.current.viewMode = threeCameraMode;
       }
     }
     return () => {
