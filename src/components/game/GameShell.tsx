@@ -62,6 +62,10 @@ export const GameShell: React.FC = () => {
     resetScore,
     foulNotice,
     setFoulNotice,
+    aimSensitivity,
+    setAimSensitivity,
+    tacticalElevation,
+    setTacticalElevation,
   } = useGameStore();
 
   const [cutAngleDeg, setCutAngleDeg] = useState<number>(0);
@@ -144,17 +148,19 @@ export const GameShell: React.FC = () => {
           const renderer = new ThreeTableRenderer(threeContainerRef.current);
           renderer.viewMode = threeCameraMode;
           renderer.zoom = zoomLevel;
+          renderer.tacticalElevation = tacticalElevation;
           renderer.onAimAdjust = (delta) => adjustAimAngleRad(delta);
           threeRendererRef.current = renderer;
         });
       } else {
         threeRendererRef.current.viewMode = threeCameraMode;
+        threeRendererRef.current.tacticalElevation = tacticalElevation;
       }
     }
     return () => {
       cancelled = true;
     };
-  }, [renderMode, threeCameraMode]);
+  }, [renderMode, threeCameraMode, tacticalElevation]);
 
   // ── Rack change ───────────────────────────────────────────────────────────────
   const handleRackChange = (mode: 'practice' | 'championship') => {
@@ -192,11 +198,12 @@ export const GameShell: React.FC = () => {
         return;
       }
 
-      // Aiming — three levels of precision
+      // Aiming — step based on selected aimSensitivity
       if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
         e.preventDefault();
         const sign = e.code === 'ArrowLeft' ? -1 : 1;
-        const step = e.ctrlKey ? 0.035 : e.shiftKey ? 0.001 : 0.003; // coarse / precision / fine
+        const baseStepRad = (aimSensitivity * Math.PI) / 180;
+        const step = e.shiftKey ? baseStepRad * 0.2 : e.ctrlKey ? baseStepRad * 10 : baseStepRad;
         adjustAimAngleRad(sign * step);
         return;
       }
@@ -479,20 +486,46 @@ export const GameShell: React.FC = () => {
 
             {/* 3D Camera Controls */}
             {renderMode === '3d' && (
-              <div className="flex items-center gap-0.5 pl-1.5 ml-1 border-l border-surface-subtle">
-                {(['tactical', 'overhead', 'orbit'] as const).map((mode) => (
-                  <button
-                    key={mode}
-                    onClick={() => handleSwitch3DCamera(mode)}
-                    className={`px-1.5 py-0.5 rounded text-[10px] font-mono capitalize ${
-                      threeCameraMode === mode
-                        ? 'bg-brass-primary text-surface-base font-bold'
-                        : 'text-ivory-muted hover:text-ivory-text'
-                    }`}
-                  >
-                    {mode === 'tactical' ? 'Cue' : mode === 'overhead' ? 'Top' : 'Orbit'}
-                  </button>
-                ))}
+              <div className="flex items-center gap-1 pl-1.5 ml-1 border-l border-surface-subtle">
+                <div className="flex items-center gap-0.5">
+                  {(['tactical', 'overhead', 'orbit'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      onClick={() => handleSwitch3DCamera(mode)}
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-mono capitalize ${
+                        threeCameraMode === mode
+                          ? 'bg-brass-primary text-surface-base font-bold'
+                          : 'text-ivory-muted hover:text-ivory-text'
+                      }`}
+                    >
+                      {mode === 'tactical' ? 'Cue' : mode === 'overhead' ? 'Top' : 'Orbit'}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Stance / Cam Height options for Tactical mode */}
+                {threeCameraMode === 'tactical' && (
+                  <div className="flex items-center gap-0.5 pl-1 border-l border-surface-subtle/60 text-[9px] font-mono">
+                    <span className="text-ivory-faint hidden sm:inline px-0.5">Stance:</span>
+                    {(['low', 'med', 'high'] as const).map((elev) => (
+                      <button
+                        key={elev}
+                        onClick={() => {
+                          setTacticalElevation(elev);
+                          if (threeRendererRef.current) threeRendererRef.current.tacticalElevation = elev;
+                        }}
+                        className={`px-1 py-0.5 rounded uppercase ${
+                          tacticalElevation === elev
+                            ? 'bg-chalk-cyan text-surface-base font-bold'
+                            : 'text-ivory-muted hover:text-ivory-text'
+                        }`}
+                        title={elev === 'high' ? 'High Stance: View wider table' : elev === 'low' ? 'Low Stance: Close cue level' : 'Medium Stance'}
+                      >
+                        {elev}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -530,47 +563,73 @@ export const GameShell: React.FC = () => {
 
             {/* ── Aim Dial ───────────────────────────────────────────── */}
             <div className="flex flex-col gap-1">
-              <span className="text-[10px] uppercase tracking-widest font-semibold text-brass-primary/80 flex items-center gap-1">
-                <Compass className="w-3 h-3" /> Aim Dial
-              </span>
-              <div className="flex items-center gap-1.5">
-                {/* Coarse buttons */}
-                <button
-                  onClick={() => adjustAimAngleRad(-0.035)}
-                  className="px-1.5 py-0.5 rounded bg-surface-elevated hover:bg-surface-subtle text-ivory-text border border-surface-subtle text-[10px] font-mono"
-                  title="−2°"
-                >−2°</button>
-                <button
-                  onClick={() => adjustAimAngleRad(-0.003)}
-                  className="px-1.5 py-0.5 rounded bg-surface-elevated hover:bg-surface-subtle text-ivory-text border border-surface-subtle text-[10px] font-mono"
-                  title="−0.17°"
-                >−</button>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] uppercase tracking-widest font-semibold text-brass-primary/80 flex items-center gap-1">
+                  <Compass className="w-3 h-3" /> Aim Dial
+                </span>
+                {/* Aim Sensitivity selector */}
+                <div className="flex items-center gap-0.5 text-[9px] font-mono">
+                  <span className="text-ivory-faint mr-0.5">Step:</span>
+                  {[
+                    { label: '0.05°', val: 0.05 },
+                    { label: '0.1°', val: 0.1 },
+                    { label: '0.5°', val: 0.5 },
+                    { label: '2°', val: 2.0 },
+                  ].map(({ label, val }) => (
+                    <button
+                      key={label}
+                      onClick={() => setAimSensitivity(val)}
+                      className={`px-1 py-0.2 rounded transition-colors ${
+                        aimSensitivity === val
+                          ? 'bg-brass-primary text-surface-base font-bold'
+                          : 'text-ivory-faint hover:text-ivory-text bg-surface-elevated/60'
+                      }`}
+                      title={`Aim step sensitivity: ${label}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-                {/* Continuous angle slider */}
+              <div className="flex items-center gap-1.5">
+                {/* Coarse -5° button */}
+                <button
+                  onClick={() => adjustAimAngleRad(-0.087)}
+                  className="px-1.5 py-0.5 rounded bg-surface-elevated hover:bg-surface-subtle text-ivory-text border border-surface-subtle text-[10px] font-mono"
+                  title="−5°"
+                >−5°</button>
+                <button
+                  onClick={() => adjustAimAngleRad(-(aimSensitivity * Math.PI) / 180)}
+                  className="px-1.5 py-0.5 rounded bg-surface-elevated hover:bg-surface-subtle text-ivory-text border border-surface-subtle text-[10px] font-mono"
+                  title={`−${aimSensitivity}°`}
+                >−{aimSensitivity}°</button>
+
+                {/* Continuous angle slider with dynamic step */}
                 <div className="relative flex flex-col items-center">
                   <input
                     type="range"
                     min="0"
                     max="359.9"
-                    step="0.05"
+                    step={aimSensitivity}
                     value={aimDeg.toFixed(2)}
                     onChange={handleAngleSlider}
                     className="w-28 accent-brass-primary cursor-ew-resize"
-                    title={`Aim angle: ${aimDeg.toFixed(1)}°`}
+                    title={`Aim angle: ${aimDeg.toFixed(2)}° (Step: ${aimSensitivity}°)`}
                   />
-                  <span className="text-[10px] font-mono text-ivory-text tabular-nums">{aimDeg.toFixed(1)}°</span>
+                  <span className="text-[10px] font-mono text-ivory-text tabular-nums">{aimDeg.toFixed(2)}°</span>
                 </div>
 
                 <button
-                  onClick={() => adjustAimAngleRad(0.003)}
+                  onClick={() => adjustAimAngleRad((aimSensitivity * Math.PI) / 180)}
                   className="px-1.5 py-0.5 rounded bg-surface-elevated hover:bg-surface-subtle text-ivory-text border border-surface-subtle text-[10px] font-mono"
-                  title="+0.17°"
-                >+</button>
+                  title={`+${aimSensitivity}°`}
+                >+{aimSensitivity}°</button>
                 <button
-                  onClick={() => adjustAimAngleRad(0.035)}
+                  onClick={() => adjustAimAngleRad(0.087)}
                   className="px-1.5 py-0.5 rounded bg-surface-elevated hover:bg-surface-subtle text-ivory-text border border-surface-subtle text-[10px] font-mono"
-                  title="+2°"
-                >+2°</button>
+                  title="+5°"
+                >+5°</button>
               </div>
             </div>
 
@@ -594,6 +653,22 @@ export const GameShell: React.FC = () => {
               >
                 <Play className="w-3.5 h-3.5 fill-current" />
                 {isSimulating ? 'Simulating…' : 'Strike'}
+              </button>
+
+              {/* Full Route Toggle with explicit text badge */}
+              <button
+                onClick={toggleFullRoute}
+                className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl border text-xs font-mono transition-all ${
+                  showFullRoute
+                    ? 'bg-felt-surface border-felt-accent text-chalk-cyan font-bold shadow-sm'
+                    : 'bg-surface-base border-surface-subtle text-ivory-faint hover:text-ivory-text'
+                }`}
+                title="Toggle Full Multi-Cushion Route Tracing vs Direct Aim Ray (R)"
+              >
+                <Route className="w-3.5 h-3.5" />
+                <span className="text-[10px] font-sans font-semibold tracking-wide">
+                  {showFullRoute ? 'Full Route' : 'Aim Ray'}
+                </span>
               </button>
 
               {/* Quick toggles */}

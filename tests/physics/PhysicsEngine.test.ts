@@ -152,4 +152,42 @@ describe('CueCraft Deterministic Physics Engine', () => {
     expect(multiLeg.cuePath[0].bounce).toBe(0);
     expect(multiLeg.cuePath[1].bounce).toBe(1);
   });
+
+  it('correctly models screw-back deflection versus follow-through in trajectory prediction', () => {
+    // Cue ball aimed directly at red ball
+    const cue = new Ball('cue', 'cue', new Vector2D(1000, 889));
+    const red = new Ball('red', 'red', new Vector2D(1500, 889));
+    engine.balls = [cue, red];
+
+    // Shot with strong screw (spinY = -0.8)
+    const screwPrediction = engine.calculateTrajectory(0, 70, 0, -0.8, 0, false);
+    expect(screwPrediction.cueDeflectionPath.length).toBeGreaterThan(0);
+    const screwEnd = screwPrediction.cueDeflectionPath[0].end;
+    const ghostPos = screwPrediction.ghostBall!;
+    // Screw shot must draw the cue ball backward (X < ghostBall.x)
+    expect(screwEnd.x).toBeLessThan(ghostPos.x);
+
+    // Shot with strong follow (spinY = +0.8)
+    const followPrediction = engine.calculateTrajectory(0, 70, 0, 0.8, 0, false);
+    expect(followPrediction.cueDeflectionPath.length).toBeGreaterThan(0);
+    const followEnd = followPrediction.cueDeflectionPath[0].end;
+    // Follow shot must propel the cue ball forward (X > ghostBall.x)
+    expect(followEnd.x).toBeGreaterThan(ghostPos.x);
+  });
+
+  it('reliably pots ball into pocket even at high speed without wall bounce', () => {
+    // Object ball placed 80mm from corner pocket (at 0, 0) moving fast directly towards it
+    const red = new Ball('red', 'red', new Vector2D(70, 70));
+    red.velocity = new Vector2D(-2500, -2500); // 3500 mm/s towards corner
+    engine.balls = [red];
+
+    // Step simulation
+    for (let frame = 0; frame < 30; frame++) {
+      engine.step(1 / 60);
+      if (red.potted) break;
+    }
+
+    expect(red.potted).toBe(true);
+    expect(red.pottedInPocket).toBe('corner-bottom-left');
+  });
 });

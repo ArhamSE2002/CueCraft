@@ -20,6 +20,7 @@ export class ThreeTableRenderer {
 
   public viewMode: CameraViewMode = 'tactical';
   public zoom: number = 1.0;
+  public tacticalElevation: 'low' | 'med' | 'high' = 'med';
   public onAimAdjust?: (deltaRad: number) => void;
 
   // Camera lerp targets
@@ -680,15 +681,32 @@ export class ThreeTableRenderer {
   }
 
   private updateCameraPosition(cueBall?: Ball, aimAngleRad?: number): void {
+    // Hide ceiling lamps in Overhead and Tactical modes so they never block the table
+    if (this.viewMode === 'overhead' || this.viewMode === 'tactical') {
+      this.lampsGroup.visible = false;
+    } else {
+      this.lampsGroup.visible = true;
+    }
+
     if (this.viewMode === 'tactical' && cueBall && aimAngleRad !== undefined) {
       // ── TACTICAL AIMING CAM ────────────────────────────────────────────────
-      // Leaning over the table directly behind the cue ball along shot line
+      // Dynamic height and distance based on player stance (low / medium / high)
       const cuePos = this.toThreeCoords(cueBall.position);
       const dirX = Math.cos(aimAngleRad);
       const dirZ = Math.sin(aimAngleRad);
 
-      const camDist = 0.75 / this.zoom;
-      const camHeight = 0.22 / this.zoom;
+      let distMult = 1.0;
+      let heightMult = 1.0;
+      if (this.tacticalElevation === 'low') {
+        distMult = 0.72;
+        heightMult = 0.65; // Chin on cue level
+      } else if (this.tacticalElevation === 'high') {
+        distMult = 1.65; // Pulled back away from table
+        heightMult = 2.6; // Elevated view looking over balls
+      }
+
+      const camDist = (0.78 * distMult) / this.zoom;
+      const camHeight = (0.24 * heightMult) / this.zoom;
 
       this.targetCameraPos.set(
         cuePos.x - dirX * camDist,
@@ -703,7 +721,7 @@ export class ThreeTableRenderer {
       this.camera.up.set(0, 1, 0);
     } else if (this.viewMode === 'overhead') {
       // ── BIRD'S EYE TOP-DOWN ────────────────────────────────────────────────
-      const dist = (3.4 / this.zoom);
+      const dist = 3.4 / this.zoom;
       this.targetCameraPos.set(0, dist, 0.001);
       this.targetLookAt.set(0, 0, 0);
       this.camera.up.set(0, 0, -1); // Up is north across table width

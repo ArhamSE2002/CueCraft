@@ -160,7 +160,9 @@ export class PhysicsEngine {
         if (ball.potted) continue;
         for (const pocket of this.table.pockets) {
           const distToPocket = ball.position.distanceTo(pocket.position);
-          if (distToPocket <= pocket.radius) {
+          // Realistic pocket throat capture: generous opening so balls entering pocket drop don't bounce off
+          const captureRadius = pocket.radius + ball.radius * 0.45;
+          if (distToPocket <= captureRadius) {
             if (ball.type === 'cue') {
               // FOUL: In-off (Cue ball pocketed)
               ball.stop();
@@ -267,13 +269,131 @@ export class PhysicsEngine {
 
     if (fullRoute) {
       // ---- FULL MULTI-CUSHION ROUTE TRACE ----
-      this.traceFullRoute(prediction, startPos, angleRad, maxLookaheadDist, effectivePower, cue);
+      this.traceFullRoute(prediction, startPos, angleRad, maxLookaheadDist, effectivePower, cue, spinX, spinY);
     } else {
       // ---- SINGLE-LEG TRACE (direction only) ----
-      this.traceSingleLeg(prediction, startPos, angleRad, maxLookaheadDist, effectivePower, cue);
+      this.traceSingleLeg(prediction, startPos, angleRad, maxLookaheadDist, effectivePower, cue, spinX, spinY);
     }
 
     return prediction;
+  }
+
+  /**
+   * Calculates post-collision ballistics for target ball and cue ball deflection,
+   * taking spin (screw / follow / stun) into account accurately.
+   */
+  private calculateImpactBallistics(
+    ghostPos: Vector2D,
+    hitBallPos: Vector2D,
+    incomingDir: Vector2D,
+    effectivePower: number,
+    spinX: number,
+    spinY: number
+  ): {
+    normal: Vector2D;
+    cutCos: number;
+    cutAngleDeg: number;
+    targetDir: Vector2D;
+    targetDist: number;
+    cueDeflectionDir: Vector2D | null;
+    cueDeflectionDist: number;
+  } {
+    const normal = hitBallPos.sub(ghostPos).normalize();
+    const tangent = normal.perpendicular();
+    const cutCos = Math.max(-1, Math.min(1, incomingDir.dot(normal)));
+    const cutAngleDeg = Math.acos(cutCos) * (180 / Math.PI);
+
+    // Initial speed based on power
+    const speed = 600 + (effectivePower / 100) * 5800;
+
+    // Target ball receives velocity along the line of centers (normal)
+    const targetSpeed = Math.max(0, cutCos * speed * ((1 + Collisions.RESTITUTION) / 2));
+    const targetDir = normal;
+    const targetDist = Math.max(160, (targetSpeed / 5000) * 2800);
+
+    // Cue ball retains tangential velocity
+    const tangentDot = incomingDir.dot(tangent);
+    let tangentVel = tangent.scale(tangentDot * speed);
+    let normalVel = normal.scale(Math.max(0, cutCos * speed * ((1 - Collisions.RESTITUTION) / 2)));
+
+    // ── Apply Spin Physics ──────────────────────────────────────────────────
+    // Backspin (Screw): bites into the cloth, pulling the cue ball backward along -normal
+    if (spinY < -0.08) {
+      const screwForce = Math.abs(spinY) * speed * 0.78 * cutCos;
+      normalVel = normalVel.sub(normal.scale(screwForce));
+    }
+    // Topspin (Follow): rolls forward along +normal behind the object ball
+    else if (spinY > 0.08) {
+      const followForce = spinY * speed * 0.58 * cutCos;
+      normalVel = normalVel.add(normal.scale(followForce));
+    }
+
+    // Side spin (English) tangential bite
+    if (Math.abs(spinX) > 0.08) {
+      tangentVel = tangentVel.add(tangent.scale(spinX * speed * 0.08));
+    }
+
+    const postVel = tangentVel.add(normalVel);
+    const postSpeed = postVel.length();
+
+    let cueDeflectionDir: Vector2D | null = null;
+    let cueDeflectionDist = 0;
+
+    if (postSpeed > 25) {
+      cueDeflectionDir = postVel.normalize();
+      cueDeflectionDist = Math.max(120, (postSpeed / 5000) * 2400);
+    }
+
+    return {
+      normal,
+      cutCos,
+      cutAngleDeg,
+      targetDir,
+      targetDist,
+      cueDeflectionDir,
+      cueDeflectionDist,
+    };
+  }
+
+  /**
+   * Helper to raycast and trace a path bouncing through cushions.
+   */
+  private traceRayWithCushions(
+    start: Vector2D,
+    dir: Vector2D,
+    totalDist: number,
+    type: 'target' | 'cue-deflection',
+    radius: number,
+    maxBounces: number = 2
+  ): TrajectorySegment[] {
+    const segments: TrajectorySegment[] = [];
+    let curPos = start;
+    let curDir = dir;
+    let remDist = totalDist;
+
+    for (let b = 0; b <= maxBounces && remDist > 40; b++) {
+      const cushionHit = this.rayCastCushion(curPos, curDir, remDist, radius);
+      if (cushionHit) {
+        segments.push({
+          start: curPos,
+          end: cushionHit.hitPoint,
+          type,
+          bounce: b,
+        });
+        curPos = cushionHit.hitPoint;
+        curDir = cushionHit.reflectDir;
+        remDist = (remDist - cushionHit.dist) * 0.72;
+      } else {
+        segments.push({
+          start: curPos,
+          end: curPos.add(curDir.scale(remDist)),
+          type,
+          bounce: b,
+        });
+        break;
+      }
+    }
+    return segments;
   }
 
   /**
@@ -285,7 +405,9 @@ export class PhysicsEngine {
     angleRad: number,
     maxLookaheadDist: number,
     effectivePower: number,
-    cue: Ball
+    cue: Ball,
+    spinX: number = 0,
+    spinY: number = 0
   ): void {
     const rayDir = Vector2D.fromAngle(angleRad, 1);
 
@@ -328,35 +450,35 @@ export class PhysicsEngine {
       prediction.ghostBall = ghostPos;
       prediction.targetBall = hitBall;
 
-      // Line of centers (normal to contact)
-      const normal = hitBall.position.sub(ghostPos).normalize();
-      const tangent = normal.perpendicular();
+      // Calculate spin-accurate impact ballistics
+      const ballistics = this.calculateImpactBallistics(
+        ghostPos,
+        hitBall.position,
+        rayDir,
+        effectivePower,
+        spinX,
+        spinY
+      );
 
-      // Cut angle
-      const cutCos = Math.max(-1, Math.min(1, rayDir.dot(normal)));
-      prediction.angleDegrees = Math.acos(cutCos) * (180 / Math.PI);
+      prediction.angleDegrees = ballistics.cutAngleDeg;
 
-      // Target ball path: length scales with power and cut angle
-      const targetDist = Math.max(150, (effectivePower / 100) * 2200 * cutCos);
-      const targetEnd = hitBall.position.add(normal.scale(targetDist));
+      // Target ball path
       prediction.targetPath.push({
         start: hitBall.position,
-        end: targetEnd,
+        end: hitBall.position.add(ballistics.targetDir.scale(ballistics.targetDist)),
         type: 'target',
         bounce: 0,
       });
 
-      // Cue ball deflection: length scales with power and remaining tangential speed
-      const sinCut = Math.sin(Math.acos(cutCos));
-      const deflectionDist = Math.max(120, (effectivePower / 100) * 1600 * Math.max(0.2, sinCut));
-      const deflectionDir = tangent.scale(Math.sign(rayDir.dot(tangent)) || 1);
-      const cueDeflectionEnd = ghostPos.add(deflectionDir.scale(deflectionDist));
-      prediction.cueDeflectionPath.push({
-        start: ghostPos,
-        end: cueDeflectionEnd,
-        type: 'cue-deflection',
-        bounce: 0,
-      });
+      // Cue ball deflection path with spin
+      if (ballistics.cueDeflectionDir && ballistics.cueDeflectionDist > 0) {
+        prediction.cueDeflectionPath.push({
+          start: ghostPos,
+          end: ghostPos.add(ballistics.cueDeflectionDir.scale(ballistics.cueDeflectionDist)),
+          type: 'cue-deflection',
+          bounce: 0,
+        });
+      }
 
       return;
     }
@@ -395,8 +517,8 @@ export class PhysicsEngine {
   }
 
   /**
-   * Full multi-cushion trace — follows the cue ball through up to 8 cushion bounces
-   * or until the distance budget is exhausted.
+   * Full multi-cushion route trace — follows the cue ball through multiple cushions
+   * AND traces object ball and deflection paths through cushions when fullRoute is active.
    */
   private traceFullRoute(
     prediction: TrajectoryPrediction,
@@ -404,14 +526,15 @@ export class PhysicsEngine {
     angleRad: number,
     totalDist: number,
     effectivePower: number,
-    cue: Ball
+    cue: Ball,
+    spinX: number = 0,
+    spinY: number = 0
   ): void {
     let currentPos = startPos;
     let currentDir = Vector2D.fromAngle(angleRad, 1);
     let remainingDist = totalDist;
     let bounce = 0;
     const MAX_BOUNCES = 8;
-    // Cushion energy loss: each bounce loses ~28% of remaining distance
     const CUSHION_ENERGY = 0.72;
 
     while (remainingDist > 50 && bounce <= MAX_BOUNCES) {
@@ -439,7 +562,7 @@ export class PhysicsEngine {
       }
 
       if (hitBall && ghostPos) {
-        // Trace stops at first ball contact
+        // Cue ball to ghost ball segment
         prediction.cuePath.push({
           start: currentPos,
           end: ghostPos,
@@ -449,28 +572,41 @@ export class PhysicsEngine {
         prediction.ghostBall = ghostPos;
         prediction.targetBall = hitBall;
 
-        const normal = hitBall.position.sub(ghostPos).normalize();
-        const tangent = normal.perpendicular();
-        const cutCos = Math.max(-1, Math.min(1, currentDir.dot(normal)));
-        prediction.angleDegrees = Math.acos(cutCos) * (180 / Math.PI);
+        // Calculate spin-accurate impact ballistics
+        const ballistics = this.calculateImpactBallistics(
+          ghostPos,
+          hitBall.position,
+          currentDir,
+          effectivePower,
+          spinX,
+          spinY
+        );
 
-        const targetDist = Math.max(150, (effectivePower / 100) * 2200 * cutCos);
-        prediction.targetPath.push({
-          start: hitBall.position,
-          end: hitBall.position.add(normal.scale(targetDist)),
-          type: 'target',
-          bounce: 0,
-        });
+        prediction.angleDegrees = ballistics.cutAngleDeg;
 
-        const sinCut = Math.sin(Math.acos(cutCos));
-        const deflectionDist = Math.max(120, (effectivePower / 100) * 1600 * Math.max(0.2, sinCut));
-        const deflectionDir = tangent.scale(Math.sign(currentDir.dot(tangent)) || 1);
-        prediction.cueDeflectionPath.push({
-          start: ghostPos,
-          end: ghostPos.add(deflectionDir.scale(deflectionDist)),
-          type: 'cue-deflection',
-          bounce: 0,
-        });
+        // Trace target ball path through cushions (multi-cushion object ball trace!)
+        const targetSegments = this.traceRayWithCushions(
+          hitBall.position,
+          ballistics.targetDir,
+          ballistics.targetDist,
+          'target',
+          hitBall.radius,
+          2
+        );
+        prediction.targetPath.push(...targetSegments);
+
+        // Trace cue ball deflection path through cushions (multi-cushion deflection trace!)
+        if (ballistics.cueDeflectionDir && ballistics.cueDeflectionDist > 0) {
+          const cueDeflectionSegments = this.traceRayWithCushions(
+            ghostPos,
+            ballistics.cueDeflectionDir,
+            ballistics.cueDeflectionDist,
+            'cue-deflection',
+            cue.radius,
+            2
+          );
+          prediction.cueDeflectionPath.push(...cueDeflectionSegments);
+        }
 
         return;
       }

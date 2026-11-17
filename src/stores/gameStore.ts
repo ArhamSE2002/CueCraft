@@ -17,6 +17,8 @@ export interface GameState {
   showTrajectories: boolean;
   showFullRoute: boolean;
   showGhostBall: boolean;
+  aimSensitivity: number; // in degrees: 0.05, 0.1, 0.5, 2.0
+  tacticalElevation: 'low' | 'med' | 'high';
   isSimulating: boolean;
   score: number;
   pottedBalls: Ball[];
@@ -43,6 +45,8 @@ export interface GameState {
   toggleTrajectories: () => void;
   toggleFullRoute: () => void;
   toggleGhostBall: () => void;
+  setAimSensitivity: (sens: number) => void;
+  setTacticalElevation: (elevation: 'low' | 'med' | 'high') => void;
   setIsSimulating: (sim: boolean) => void;
   addScore: (pts: number) => void;
   deductScore: (pts: number) => void;
@@ -64,6 +68,8 @@ export const useGameStore = create<GameState>((set) => ({
   showTrajectories: true,
   showFullRoute: true,
   showGhostBall: true,
+  aimSensitivity: 0.1, // 0.1 degree default fine sensitivity
+  tacticalElevation: 'med',
   isSimulating: false,
   score: 0,
   pottedBalls: [],
@@ -101,6 +107,8 @@ export const useGameStore = create<GameState>((set) => ({
     set((state) => ({ showFullRoute: !state.showFullRoute })),
   toggleGhostBall: () =>
     set((state) => ({ showGhostBall: !state.showGhostBall })),
+  setAimSensitivity: (aimSensitivity) => set({ aimSensitivity }),
+  setTacticalElevation: (tacticalElevation) => set({ tacticalElevation }),
   setIsSimulating: (isSimulating) => set({ isSimulating }),
   addScore: (pts) => set((state) => ({ score: state.score + pts })),
   deductScore: (pts) => set((state) => ({ score: Math.max(0, state.score - pts) })),

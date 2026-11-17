@@ -73,10 +73,37 @@ export class Cushions {
   }
 
   /**
+   * Checks if a position is within the throat/mouth of any of the 6 pockets.
+   */
+  public static isNearPocket(pos: Vector2D, threshold: number = 95): boolean {
+    const W = SnookerTable.WIDTH;
+    const L = SnookerTable.LENGTH;
+    const pocketPositions = [
+      new Vector2D(0, 0),
+      new Vector2D(0, W),
+      new Vector2D(L / 2, 0),
+      new Vector2D(L / 2, W),
+      new Vector2D(L, 0),
+      new Vector2D(L, W),
+    ];
+    for (const p of pocketPositions) {
+      if (pos.distanceTo(p) < threshold) return true;
+    }
+    return false;
+  }
+
+  /**
    * Clamps balls to table boundaries to ensure zero tunneling.
+   * If a ball is near or entering a pocket mouth, boundary clamping is bypassed
+   * so the ball naturally drops into the pocket rather than bouncing off invisible walls.
    */
   public static enforceTableBounds(ball: Ball): void {
     if (ball.potted) return;
+
+    // Do not clamp or bounce balls that are entering pocket drop mouths
+    if (this.isNearPocket(ball.position, 95)) {
+      return;
+    }
 
     const R = ball.radius;
     const minX = R;
