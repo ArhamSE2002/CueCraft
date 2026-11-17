@@ -15,6 +15,7 @@ export interface GameState {
   zoomLevel: number; // 0.75 to 2.5
   panOffset: { x: number; y: number };
   showTrajectories: boolean;
+  showFullRoute: boolean;
   showGhostBall: boolean;
   isSimulating: boolean;
   score: number;
@@ -40,6 +41,7 @@ export interface GameState {
   resetZoom: () => void;
   setPanOffset: (offset: { x: number; y: number }) => void;
   toggleTrajectories: () => void;
+  toggleFullRoute: () => void;
   toggleGhostBall: () => void;
   setIsSimulating: (sim: boolean) => void;
   addScore: (pts: number) => void;
@@ -60,6 +62,7 @@ export const useGameStore = create<GameState>((set) => ({
   zoomLevel: 1.0,
   panOffset: { x: 0, y: 0 },
   showTrajectories: true,
+  showFullRoute: true,
   showGhostBall: true,
   isSimulating: false,
   score: 0,
@@ -94,6 +97,8 @@ export const useGameStore = create<GameState>((set) => ({
   setPanOffset: (panOffset) => set({ panOffset }),
   toggleTrajectories: () =>
     set((state) => ({ showTrajectories: !state.showTrajectories })),
+  toggleFullRoute: () =>
+    set((state) => ({ showFullRoute: !state.showFullRoute })),
   toggleGhostBall: () =>
     set((state) => ({ showGhostBall: !state.showGhostBall })),
   setIsSimulating: (isSimulating) => set({ isSimulating }),

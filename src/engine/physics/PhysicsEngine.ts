@@ -9,6 +9,7 @@ export interface TrajectorySegment {
   start: Vector2D;
   end: Vector2D;
   type: 'cue' | 'target' | 'cue-deflection' | 'cushion-reflection' | 'swerve';
+  bounce: number; // 0 = first leg, 1 = after first cushion, etc.
 }
 
 export interface TrajectoryPrediction {
@@ -20,6 +21,7 @@ export interface TrajectoryPrediction {
   cushionHit: Vector2D | null;
   angleDegrees: number; // Cut angle in degrees
   isCurvedSwerve?: boolean;
+  fullRoute: boolean; // Whether multi-cushion trace was computed
 }
 
 export interface FoulEvent {
@@ -202,13 +204,15 @@ export class PhysicsEngine {
    * Predicts trajectory rays, ghost ball position, and deflection angles.
    * Line lengths dynamically scale with cue power.
    * If cue butt is elevated with side spin, computes curved swerve prediction.
+   * @param fullRoute If true, traces multi-cushion path until distance budget is exhausted.
    */
   public calculateTrajectory(
     angleRad: number,
     power: number = 35,
     spinX: number = 0,
     spinY: number = 0,
-    cueElevationDeg: number = 0
+    cueElevationDeg: number = 0,
+    fullRoute: boolean = false
   ): TrajectoryPrediction {
     const cue = this.cueBall;
     const prediction: TrajectoryPrediction = {
@@ -220,6 +224,7 @@ export class PhysicsEngine {
       cushionHit: null,
       angleDegrees: 0,
       isCurvedSwerve: false,
+      fullRoute,
     };
 
     if (!cue || cue.potted) return prediction;
@@ -253,12 +258,35 @@ export class PhysicsEngine {
           start: currentPos,
           end: nextPos,
           type: 'swerve',
+          bounce: 0,
         });
         currentPos = nextPos;
       }
       return prediction;
     }
 
+    if (fullRoute) {
+      // ---- FULL MULTI-CUSHION ROUTE TRACE ----
+      this.traceFullRoute(prediction, startPos, angleRad, maxLookaheadDist, effectivePower, cue);
+    } else {
+      // ---- SINGLE-LEG TRACE (direction only) ----
+      this.traceSingleLeg(prediction, startPos, angleRad, maxLookaheadDist, effectivePower, cue);
+    }
+
+    return prediction;
+  }
+
+  /**
+   * Traces one leg from startPos in direction angleRad — first ball OR first cushion then stops.
+   */
+  private traceSingleLeg(
+    prediction: TrajectoryPrediction,
+    startPos: Vector2D,
+    angleRad: number,
+    maxLookaheadDist: number,
+    effectivePower: number,
+    cue: Ball
+  ): void {
     const rayDir = Vector2D.fromAngle(angleRad, 1);
 
     // Check intersection with all active non-cue balls
@@ -295,6 +323,7 @@ export class PhysicsEngine {
         start: startPos,
         end: ghostPos,
         type: 'cue',
+        bounce: 0,
       });
       prediction.ghostBall = ghostPos;
       prediction.targetBall = hitBall;
@@ -314,6 +343,7 @@ export class PhysicsEngine {
         start: hitBall.position,
         end: targetEnd,
         type: 'target',
+        bounce: 0,
       });
 
       // Cue ball deflection: length scales with power and remaining tangential speed
@@ -325,54 +355,33 @@ export class PhysicsEngine {
         start: ghostPos,
         end: cueDeflectionEnd,
         type: 'cue-deflection',
+        bounce: 0,
       });
 
-      return prediction;
+      return;
     }
 
     // If no ball was hit, raycast against table cushions within power distance
-    let closestCushionDist = maxLookaheadDist;
-    let cushionHitPoint: Vector2D | null = null;
-    let cushionNormal: Vector2D | null = null;
+    const cushionResult = this.rayCastCushion(startPos, rayDir, maxLookaheadDist, cue.radius);
 
-    for (const cushion of this.table.cushions) {
-      const p1 = cushion.start;
-      const p2 = cushion.end;
-      const v1 = startPos.sub(p1);
-      const v2 = p2.sub(p1);
-      const v3 = new Vector2D(-rayDir.y, rayDir.x);
-
-      const dot = v2.dot(v3);
-      if (Math.abs(dot) < 1e-6) continue;
-
-      const t1 = v2.cross(v1) / dot;
-      const t2 = v1.dot(v3) / dot;
-
-      if (t1 > cue.radius && t1 < closestCushionDist && t2 >= 0 && t2 <= 1) {
-        closestCushionDist = t1;
-        cushionHitPoint = startPos.add(rayDir.scale(t1 - cue.radius));
-        cushionNormal = cushion.normal;
-      }
-    }
-
-    if (cushionHitPoint && cushionNormal) {
+    if (cushionResult) {
       prediction.cuePath.push({
         start: startPos,
-        end: cushionHitPoint,
+        end: cushionResult.hitPoint,
         type: 'cue',
+        bounce: 0,
       });
-      prediction.cushionHit = cushionHitPoint;
+      prediction.cushionHit = cushionResult.hitPoint;
 
       // Reflected ray (length scales with remaining power)
-      const remainingDist = Math.max(100, (maxLookaheadDist - closestCushionDist) * 0.72);
-      const incidentNormal = rayDir.dot(cushionNormal);
-      const reflectDir = rayDir.sub(cushionNormal.scale(2 * incidentNormal)).normalize();
-      const reflectEnd = cushionHitPoint.add(reflectDir.scale(remainingDist));
+      const remainingDist = Math.max(100, (maxLookaheadDist - cushionResult.dist) * 0.72);
+      const reflectEnd = cushionResult.hitPoint.add(cushionResult.reflectDir.scale(remainingDist));
 
       prediction.cuePath.push({
-        start: cushionHitPoint,
+        start: cushionResult.hitPoint,
         end: reflectEnd,
         type: 'cushion-reflection',
+        bounce: 1,
       });
     } else {
       // Free open ray: length proportional to shot power
@@ -380,10 +389,162 @@ export class PhysicsEngine {
         start: startPos,
         end: startPos.add(rayDir.scale(maxLookaheadDist)),
         type: 'cue',
+        bounce: 0,
       });
     }
+  }
 
-    return prediction;
+  /**
+   * Full multi-cushion trace — follows the cue ball through up to 8 cushion bounces
+   * or until the distance budget is exhausted.
+   */
+  private traceFullRoute(
+    prediction: TrajectoryPrediction,
+    startPos: Vector2D,
+    angleRad: number,
+    totalDist: number,
+    effectivePower: number,
+    cue: Ball
+  ): void {
+    let currentPos = startPos;
+    let currentDir = Vector2D.fromAngle(angleRad, 1);
+    let remainingDist = totalDist;
+    let bounce = 0;
+    const MAX_BOUNCES = 8;
+    // Cushion energy loss: each bounce loses ~28% of remaining distance
+    const CUSHION_ENERGY = 0.72;
+
+    while (remainingDist > 50 && bounce <= MAX_BOUNCES) {
+      // Check ball intersection first
+      let closestBallDist = remainingDist;
+      let hitBall: Ball | null = null;
+      let ghostPos: Vector2D | null = null;
+
+      for (const ball of this.balls) {
+        if (ball.type === 'cue' || ball.potted) continue;
+        const d = ball.position.sub(currentPos);
+        const proj = d.dot(currentDir);
+        if (proj <= 0) continue;
+        const perpSq = d.lengthSq() - proj * proj;
+        const collisionRadius = cue.radius + ball.radius;
+        if (perpSq <= collisionRadius * collisionRadius) {
+          const halfChord = Math.sqrt(collisionRadius * collisionRadius - perpSq);
+          const hitDist = proj - halfChord;
+          if (hitDist > 0 && hitDist < closestBallDist) {
+            closestBallDist = hitDist;
+            hitBall = ball;
+            ghostPos = currentPos.add(currentDir.scale(hitDist));
+          }
+        }
+      }
+
+      if (hitBall && ghostPos) {
+        // Trace stops at first ball contact
+        prediction.cuePath.push({
+          start: currentPos,
+          end: ghostPos,
+          type: bounce === 0 ? 'cue' : 'cushion-reflection',
+          bounce,
+        });
+        prediction.ghostBall = ghostPos;
+        prediction.targetBall = hitBall;
+
+        const normal = hitBall.position.sub(ghostPos).normalize();
+        const tangent = normal.perpendicular();
+        const cutCos = Math.max(-1, Math.min(1, currentDir.dot(normal)));
+        prediction.angleDegrees = Math.acos(cutCos) * (180 / Math.PI);
+
+        const targetDist = Math.max(150, (effectivePower / 100) * 2200 * cutCos);
+        prediction.targetPath.push({
+          start: hitBall.position,
+          end: hitBall.position.add(normal.scale(targetDist)),
+          type: 'target',
+          bounce: 0,
+        });
+
+        const sinCut = Math.sin(Math.acos(cutCos));
+        const deflectionDist = Math.max(120, (effectivePower / 100) * 1600 * Math.max(0.2, sinCut));
+        const deflectionDir = tangent.scale(Math.sign(currentDir.dot(tangent)) || 1);
+        prediction.cueDeflectionPath.push({
+          start: ghostPos,
+          end: ghostPos.add(deflectionDir.scale(deflectionDist)),
+          type: 'cue-deflection',
+          bounce: 0,
+        });
+
+        return;
+      }
+
+      // Raycast against cushions
+      const cushionResult = this.rayCastCushion(currentPos, currentDir, remainingDist, cue.radius);
+
+      if (cushionResult) {
+        prediction.cuePath.push({
+          start: currentPos,
+          end: cushionResult.hitPoint,
+          type: bounce === 0 ? 'cue' : 'cushion-reflection',
+          bounce,
+        });
+        if (bounce === 0) prediction.cushionHit = cushionResult.hitPoint;
+
+        currentPos = cushionResult.hitPoint;
+        currentDir = cushionResult.reflectDir;
+        remainingDist = (remainingDist - cushionResult.dist) * CUSHION_ENERGY;
+        bounce++;
+      } else {
+        // No cushion in range — draw remaining leg and stop
+        prediction.cuePath.push({
+          start: currentPos,
+          end: currentPos.add(currentDir.scale(remainingDist)),
+          type: bounce === 0 ? 'cue' : 'cushion-reflection',
+          bounce,
+        });
+        break;
+      }
+    }
+  }
+
+  /**
+   * Raycast a line from origin in direction dir against all cushion segments.
+   * Returns the closest hit point, its distance, and the reflected direction.
+   */
+  private rayCastCushion(
+    origin: Vector2D,
+    dir: Vector2D,
+    maxDist: number,
+    ballRadius: number
+  ): { hitPoint: Vector2D; dist: number; reflectDir: Vector2D } | null {
+    let closestDist = maxDist;
+    let cushionHitPoint: Vector2D | null = null;
+    let cushionNormal: Vector2D | null = null;
+
+    for (const cushion of this.table.cushions) {
+      const p1 = cushion.start;
+      const p2 = cushion.end;
+      const v1 = origin.sub(p1);
+      const v2 = p2.sub(p1);
+      const v3 = new Vector2D(-dir.y, dir.x);
+
+      const dot = v2.dot(v3);
+      if (Math.abs(dot) < 1e-6) continue;
+
+      const t1 = v2.cross(v1) / dot;
+      const t2 = v1.dot(v3) / dot;
+
+      if (t1 > ballRadius && t1 < closestDist && t2 >= 0 && t2 <= 1) {
+        closestDist = t1;
+        cushionHitPoint = origin.add(dir.scale(t1 - ballRadius));
+        cushionNormal = cushion.normal;
+      }
+    }
+
+    if (cushionHitPoint && cushionNormal) {
+      const incidentNormal = dir.dot(cushionNormal);
+      const reflectDir = dir.sub(cushionNormal.scale(2 * incidentNormal)).normalize();
+      return { hitPoint: cushionHitPoint, dist: closestDist, reflectDir };
+    }
+
+    return null;
   }
 
   /**

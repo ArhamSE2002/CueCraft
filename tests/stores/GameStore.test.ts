@@ -66,6 +66,10 @@ describe('GameStore Zustand State Transitions', () => {
     store.toggleTrajectories();
     expect(useGameStore.getState().showTrajectories).toBe(false);
 
+    expect(store.showFullRoute).toBe(true);
+    store.toggleFullRoute();
+    expect(useGameStore.getState().showFullRoute).toBe(false);
+
     expect(store.showGhostBall).toBe(true);
     store.toggleGhostBall();
     expect(useGameStore.getState().showGhostBall).toBe(false);

@@ -132,4 +132,24 @@ describe('CueCraft Deterministic Physics Engine', () => {
     // Speed should be reduced by cushion restitution
     expect(Math.abs(cue.velocity.x)).toBeLessThan(1000);
   });
+
+  it('traces full multi-cushion route when fullRoute is enabled', () => {
+    // Empty table with cue ball shooting at an angle into a cushion
+    const cue = new Ball('cue', 'cue', new Vector2D(1000, 500));
+    engine.balls = [cue];
+
+    // High power shot towards top cushion at 30 degrees
+    const angleRad = (30 * Math.PI) / 180;
+    const singleLeg = engine.calculateTrajectory(angleRad, 80, 0, 0, 0, false);
+    const multiLeg = engine.calculateTrajectory(angleRad, 80, 0, 0, 0, true);
+
+    expect(singleLeg.fullRoute).toBe(false);
+    expect(multiLeg.fullRoute).toBe(true);
+
+    // Multi-cushion trace should produce multiple segments (at least 2 bounces across cushions)
+    expect(multiLeg.cuePath.length).toBeGreaterThanOrEqual(2);
+    // The bounce indices should increment sequentially
+    expect(multiLeg.cuePath[0].bounce).toBe(0);
+    expect(multiLeg.cuePath[1].bounce).toBe(1);
+  });
 });

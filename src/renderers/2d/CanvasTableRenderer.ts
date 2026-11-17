@@ -247,10 +247,13 @@ export class CanvasTableRenderer {
   private drawTrajectories(prediction: TrajectoryPrediction): void {
     const ctx = this.ctx;
 
-    // 1. Cue Ball Aim Line (or Curved Swerve Line)
+    // 1. Cue Ball Aim Line (or Curved Swerve Line) with multi-bounce opacity fading
     for (const segment of prediction.cuePath) {
       const s = this.toScreen(segment.start);
       const e = this.toScreen(segment.end);
+      const bounce = (segment as any).bounce ?? 0;
+      // Each cushion bounce fades the line: bounce 0 = full, bounce 1 = 65%, bounce 2 = 42%, etc.
+      const alpha = Math.pow(0.65, bounce);
 
       ctx.beginPath();
       ctx.moveTo(s.x, s.y);
@@ -258,19 +261,30 @@ export class CanvasTableRenderer {
 
       if (segment.type === 'swerve') {
         // Glowing cyan curved swerve trail
-        ctx.strokeStyle = '#2DD4BF';
+        ctx.strokeStyle = `rgba(45, 212, 191, ${(0.9 * alpha).toFixed(2)})`;
         ctx.lineWidth = 2.2 * this.scale;
+        ctx.setLineDash([]);
         ctx.stroke();
       } else if (segment.type === 'cushion-reflection') {
-        ctx.strokeStyle = 'rgba(197, 160, 89, 0.7)';
-        ctx.setLineDash([4 * this.scale, 4 * this.scale]);
-        ctx.lineWidth = 1.5 * this.scale;
+        // Each cushion bounce: brass-tinted dashed, progressively more transparent
+        const dashLen = 4 * this.scale;
+        ctx.strokeStyle = `rgba(197, 160, 89, ${(0.8 * alpha).toFixed(2)})`;
+        ctx.setLineDash([dashLen, dashLen]);
+        ctx.lineWidth = 1.6 * this.scale;
         ctx.stroke();
         ctx.setLineDash([]);
+        // Draw bounce count indicator dot at the start of each reflected segment
+        if (bounce > 0) {
+          ctx.fillStyle = `rgba(197, 160, 89, ${(0.9 * alpha).toFixed(2)})`;
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, 3 * this.scale, 0, Math.PI * 2);
+          ctx.fill();
+        }
       } else {
-        ctx.strokeStyle = 'rgba(247, 245, 238, 0.75)';
+        // Primary cue path: white/ivory dashed
+        ctx.strokeStyle = `rgba(247, 245, 238, ${(0.82 * alpha).toFixed(2)})`;
         ctx.setLineDash([6 * this.scale, 3 * this.scale]);
-        ctx.lineWidth = 1.5 * this.scale;
+        ctx.lineWidth = 1.6 * this.scale;
         ctx.stroke();
         ctx.setLineDash([]);
       }
