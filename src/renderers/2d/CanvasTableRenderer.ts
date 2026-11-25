@@ -31,7 +31,6 @@ export class CanvasTableRenderer {
   private scale: number = 1;
   private offsetX: number = 0;
   private offsetY: number = 0;
-  private currentZoom: number = 1;
   private activeTableLength: number = SnookerTable.LENGTH;
   private activeTableWidth: number = SnookerTable.WIDTH;
 
@@ -59,7 +58,6 @@ export class CanvasTableRenderer {
     panY: number = 0,
     table?: SnookerTable
   ): void {
-    this.currentZoom = zoom;
     if (table) {
       this.activeTableLength = table.length;
       this.activeTableWidth = table.width;

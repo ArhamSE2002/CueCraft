@@ -59,7 +59,6 @@ export const GameShell: React.FC = () => {
   const {
     renderMode,
     setRenderMode,
-    gameMode,
     setGameMode,
     gameVariant,
     setGameVariant,

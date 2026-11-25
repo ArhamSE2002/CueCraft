@@ -18,7 +18,7 @@ export class Cushions {
     ball: Ball,
     cushion: CushionSegment,
     spec: CushionSpec = this.DEFAULT_CUSHION,
-    contactOut?: Vector2D
+    contactOut?: { x: number; y: number }
   ): boolean {
     if (ball.potted) return false;
 

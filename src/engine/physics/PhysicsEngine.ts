@@ -340,7 +340,7 @@ export class PhysicsEngine {
       for (const ball of this.balls) {
         if (ball.potted) continue;
         let hitCushion = false;
-        const contactPt = new Vector2D(0, 0);
+        const contactPt = { x: 0, y: 0 };
         for (const cushion of this.table.cushions) {
           if (Cushions.resolveCushionCollision(ball, cushion, this.cushionConfig, contactPt)) {
             hitCushion = true;
@@ -348,8 +348,9 @@ export class PhysicsEngine {
         }
         Cushions.enforceTableBounds(ball, this.cushionConfig, this.table);
         if (hitCushion) {
-          if (ball.type === 'cue' && onCueCushionHit) onCueCushionHit(contactPt.clone());
-          if (ball.type !== 'cue' && onBallCushionHit) onBallCushionHit(ball.id, contactPt.clone());
+          const contactVec = new Vector2D(contactPt.x, contactPt.y);
+          if (ball.type === 'cue' && onCueCushionHit) onCueCushionHit(contactVec);
+          if (ball.type !== 'cue' && onBallCushionHit) onBallCushionHit(ball.id, contactVec);
         }
       }
 

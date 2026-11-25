@@ -486,7 +486,7 @@ export class ThreeTableRenderer {
     });
   }
 
-  private setupClothMarkings(table: SnookerTable, L: number, W: number): void {
+  private setupClothMarkings(table: SnookerTable, _L: number, W: number): void {
     const baulkX = (table.baulkDist - table.length / 2) * 0.001;
     const markingMat = new THREE.LineBasicMaterial({
       color: 0xf5f2eb,
@@ -571,7 +571,7 @@ export class ThreeTableRenderer {
     });
   }
 
-  private setupPockets(table: SnookerTable, L: number, W: number): void {
+  private setupPockets(table: SnookerTable, _L: number, _W: number): void {
     const brassMat = new THREE.MeshStandardMaterial({
       color: 0xc5a059,
       metalness: 0.9,
