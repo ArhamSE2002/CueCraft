@@ -9,6 +9,7 @@ interface Props {
   canonical?: string;
   image?: string;
   noFooter?: boolean;
+  darkScene?: boolean;
 }
 
 const {
@@ -17,14 +18,17 @@ const {
   canonical = Astro.url.href,
   image = '/og-image.png',
   noFooter = false,
+  darkScene = true,
 } = Astro.props;
 
 const pageTitle = title === siteConfig.name ? `${siteConfig.name} — ${siteConfig.tagline}` : `${title} | ${siteConfig.name}`;
 const currentPath = Astro.url.pathname;
+const isSimulator = noFooter;
+const useDarkChrome = isSimulator || darkScene;
 ---
 
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -38,7 +42,7 @@ const currentPath = Astro.url.pathname;
     <meta name="keywords" content={siteConfig.keywords.join(', ')} />
     <meta name="author" content={siteConfig.author} />
 
-    <!-- Open Graph / Social Media -->
+    <!-- Open Graph -->
     <meta property="og:type" content="website" />
     <meta property="og:url" content={canonical} />
     <meta property="og:title" content={pageTitle} />
@@ -52,151 +56,176 @@ const currentPath = Astro.url.pathname;
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={image} />
 
-    <!-- Google Fonts: Cinzel & Plus Jakarta Sans & JetBrains Mono -->
+    <!-- Modern Fonts: Space Grotesk + DM Sans + JetBrains Mono -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400..700;1,9..40,400..700&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
   </head>
 
-  <body class={`bg-surface-base text-ivory-text antialiased selection:bg-brass-primary selection:text-surface-base ${
-    noFooter ? 'h-screen max-h-screen overflow-hidden flex flex-col' : 'min-h-screen flex flex-col'
-  }`}>
-    {/* Global Navigation Bar */}
-    <header class={`sticky top-0 z-50 w-full bg-surface-base/95 backdrop-blur-md border-b border-surface-subtle ${
-      noFooter ? 'h-12' : 'h-16'
+  <body class={isSimulator
+    ? 'h-screen max-h-screen overflow-hidden flex flex-col bg-arena-bg text-arena-text antialiased'
+    : darkScene
+      ? 'min-h-screen flex flex-col bg-[#05080C] text-white antialiased'
+      : 'min-h-screen flex flex-col bg-studio-bg text-studio-ink antialiased'}>
+
+    {/* Global Top Navigation Bar (Adaptive per route mode) */}
+    <header class={`sticky top-0 z-50 w-full backdrop-blur-xl transition-colors ${
+      isSimulator
+        ? 'h-12 bg-arena-bg/95 border-b border-arena-border text-arena-text'
+        : darkScene
+          ? 'h-16 bg-[#05080C]/70 border-b border-white/[0.08] text-white'
+          : 'h-16 bg-studio-bg/85 border-b border-studio-border text-studio-ink'
     }`}>
       <div class={`max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between ${
-        noFooter ? 'h-12' : 'h-16'
+        isSimulator ? 'h-12' : 'h-16'
       }`}>
-        {/* Brand Crest */}
         <a href="/" class="flex items-center gap-2.5 group">
-          <CueCraftLogo size={noFooter ? 30 : 36} class="transition-transform duration-200 group-hover:scale-105 shrink-0" />
+          <CueCraftLogo size={isSimulator ? 28 : 34} class="transition-transform duration-200 group-hover:scale-105 shrink-0" />
           <div class="flex flex-col">
-            <span class="font-serif text-lg font-bold tracking-wide text-ivory-text group-hover:text-brass-hover transition-colors leading-tight">
+            <span class="font-display text-base sm:text-lg font-bold tracking-tight leading-none">
               {siteConfig.name}
             </span>
-            <span class="text-[9px] font-mono tracking-widest uppercase text-brass-primary/80">
-              Precision Snooker
+            <span class={`text-[9px] font-mono tracking-[0.18em] uppercase mt-0.5 ${
+              useDarkChrome ? 'text-emerald-bright' : 'text-emerald font-semibold'
+            }`}>
+              Cue Physics Studio
             </span>
           </div>
         </a>
 
-        {/* Desktop Navigation Links */}
-        <nav class="hidden md:flex items-center gap-7 text-sm font-medium">
+        {/* Desktop Nav Pills */}
+        <nav class={`hidden md:flex items-center gap-1 rounded-full px-1.5 py-1 text-xs font-medium border ${
+          useDarkChrome
+            ? 'bg-white/[0.05] border-white/[0.1]'
+            : 'bg-studio-paper border-studio-border shadow-sm'
+        }`}>
           {siteConfig.navLinks.map((link) => {
             const isActive = currentPath === link.href || (link.href !== '/' && currentPath.startsWith(link.href));
             return (
               <a
                 href={link.href}
-                class={`transition-colors relative py-1 ${
+                class={`px-3.5 py-1.5 rounded-full transition-all ${
                   isActive
-                    ? 'text-brass-primary font-semibold'
-                    : 'text-ivory-muted hover:text-ivory-text'
+                    ? useDarkChrome
+                      ? 'bg-emerald-bright text-arena-bg font-bold'
+                      : 'bg-studio-ink text-white font-semibold'
+                    : useDarkChrome
+                      ? 'text-slate-300 hover:text-white'
+                      : 'text-studio-sub hover:text-studio-ink'
                 }`}
               >
                 {link.title}
-                {isActive && (
-                  <span class="absolute bottom-0 left-0 w-full h-[2px] bg-brass-primary rounded-full" />
-                )}
               </a>
             );
           })}
         </nav>
 
-        {/* CTA Button */}
+        {/* Primary CTA */}
         <div class="flex items-center gap-3">
-          <a
-            href="/play"
-            class="px-4 py-2 rounded-lg bg-brass-primary text-surface-base font-semibold text-xs tracking-wider uppercase hover:bg-brass-hover transition-all shadow-brass-glow active:scale-95 flex items-center gap-1.5"
-          >
-            <span>Play Simulator</span>
-            <span class="text-xs">&rarr;</span>
-          </a>
+          {!isSimulator ? (
+            <a
+              href="/play"
+              class={`px-4 py-2 rounded-full font-semibold text-xs tracking-wide transition-all active:scale-95 flex items-center gap-1.5 ${
+                useDarkChrome
+                  ? 'bg-emerald-bright hover:bg-emerald text-arena-bg hover:text-white font-bold shadow-brass-glow'
+                  : 'bg-emerald hover:bg-emerald-dark text-white shadow-sm hover:shadow-md'
+              }`}
+            >
+              <span>Launch Simulator</span>
+              <span>&rarr;</span>
+            </a>
+          ) : (
+            <a
+              href="/lessons"
+              class="px-3.5 py-1.5 rounded-full bg-arena-panel hover:bg-arena-elevated border border-arena-border text-arena-text font-medium text-xs transition-colors"
+            >
+              Drills &rarr;
+            </a>
+          )}
         </div>
       </div>
     </header>
 
-    {/* Page Main Slot */}
-    <main class={noFooter ? 'flex-1 min-h-0 overflow-hidden flex flex-col' : 'flex-1'}>
+    {/* Page Slot */}
+    <main class={isSimulator ? 'flex-1 min-h-0 overflow-hidden flex flex-col' : 'flex-1 relative z-10'}>
       <slot />
     </main>
 
-    {/* Global Refined British Club Footer */}
+    {/* Clean Modern Editorial Footer */}
     {!noFooter && (
-      <footer class="w-full bg-surface-card border-t border-surface-subtle mt-24">
+      <footer class={`relative z-20 w-full border-t ${
+        darkScene
+          ? 'bg-[#06090D] border-white/[0.08] text-slate-200'
+          : 'bg-studio-paper border-studio-border text-studio-ink'
+      }`}>
         <div class="max-w-7xl mx-auto px-4 sm:px-6 py-14">
-          <div class="grid grid-cols-1 md:grid-cols-4 gap-10 mb-12">
-            {/* Brand Philosophy */}
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-10 mb-10">
             <div class="md:col-span-2 flex flex-col gap-3">
               <div class="flex items-center gap-2.5">
-                <CueCraftLogo size={28} />
-                <span class="font-serif text-lg font-bold tracking-wide text-ivory-text">
+                <CueCraftLogo size={30} />
+                <span class={`font-display text-lg font-bold tracking-tight ${darkScene ? 'text-white' : 'text-studio-ink'}`}>
                   {siteConfig.name}
                 </span>
               </div>
-              <p class="text-xs text-ivory-muted leading-relaxed max-w-md">
-                A high-precision snooker simulation and learning platform engineered to decode the physics of cue ball control, spin ballistics, and cushion rebound angles. Built on first-principles classical mechanics.
+              <p class={`text-xs leading-relaxed max-w-md ${darkScene ? 'text-slate-400' : 'text-studio-sub'}`}>
+                Engineering-grade cue sports simulator built for learning ballistics, spin mechanics, cushion geometry, and multi-discipline table strategy across Snooker, 9-Ball, and 8-Ball.
               </p>
-              <div class="flex items-center gap-2 mt-2 text-xs font-mono text-brass-muted">
-                <span>Strachan No. 10 Baize</span>
+              <div class="flex flex-wrap items-center gap-2 mt-1 text-[11px] font-mono text-emerald-bright font-semibold">
+                <span>240 Hz Rigid-Body Physics</span>
                 <span>&bull;</span>
-                <span>Phenolic Resin Specs</span>
+                <span>2D + 3D Sync</span>
                 <span>&bull;</span>
-                <span>Deterministic Engine</span>
+                <span>Zero Install</span>
               </div>
             </div>
 
-            {/* Platform Destinations */}
             <div class="flex flex-col gap-2.5">
-              <span class="text-xs font-semibold uppercase tracking-wider text-brass-primary">
-                Platform
+              <span class={`text-xs font-display font-bold uppercase tracking-wider ${darkScene ? 'text-white' : 'text-studio-ink'}`}>
+                Simulator
               </span>
-              <a href="/play" class="text-xs text-ivory-muted hover:text-ivory-text transition-colors">
-                Interactive 2D/3D Simulator
+              <a href="/play" class={`text-xs transition-colors ${darkScene ? 'text-slate-400 hover:text-emerald-bright' : 'text-studio-sub hover:text-emerald'}`}>
+                Practice Lab
               </a>
-              <a href="/learn" class="text-xs text-ivory-muted hover:text-ivory-text transition-colors">
-                The Science of Snooker
+              <a href="/play?game=snooker" class={`text-xs transition-colors ${darkScene ? 'text-slate-400 hover:text-emerald-bright' : 'text-studio-sub hover:text-emerald'}`}>
+                12ft Snooker
               </a>
-              <a href="/lessons" class="text-xs text-ivory-muted hover:text-ivory-text transition-colors">
-                Structured Lessons
+              <a href="/play?game=9ball" class={`text-xs transition-colors ${darkScene ? 'text-slate-400 hover:text-emerald-bright' : 'text-studio-sub hover:text-emerald'}`}>
+                9-Ball Pro Rotation
               </a>
-              <a href="/about" class="text-xs text-ivory-muted hover:text-ivory-text transition-colors">
-                Platform Architecture
+              <a href="/play?game=8ball" class={`text-xs transition-colors ${darkScene ? 'text-slate-400 hover:text-emerald-bright' : 'text-studio-sub hover:text-emerald'}`}>
+                American 8-Ball
               </a>
             </div>
 
-            {/* Educational Topics */}
             <div class="flex flex-col gap-2.5">
-              <span class="text-xs font-semibold uppercase tracking-wider text-brass-primary">
-                Physics Topics
+              <span class={`text-xs font-display font-bold uppercase tracking-wider ${darkScene ? 'text-white' : 'text-studio-ink'}`}>
+                Curriculum
               </span>
-              <a href="/learn/cue-ball-control" class="text-xs text-ivory-muted hover:text-ivory-text transition-colors">
-                Cue Ball Control & Stun
+              <a href="/learn/cue-ball-control" class={`text-xs transition-colors ${darkScene ? 'text-slate-400 hover:text-emerald-bright' : 'text-studio-sub hover:text-emerald'}`}>
+                Stun &amp; Cue Control
               </a>
-              <a href="/learn/side-spin-ballistics" class="text-xs text-ivory-muted hover:text-ivory-text transition-colors">
-                Running vs Check Side
+              <a href="/learn/topspin-and-backspin" class={`text-xs transition-colors ${darkScene ? 'text-slate-400 hover:text-emerald-bright' : 'text-studio-sub hover:text-emerald'}`}>
+                Draw &amp; Follow Slip
               </a>
-              <a href="/learn/cushion-rebounds" class="text-xs text-ivory-muted hover:text-ivory-text transition-colors">
-                Cushion Restitution Dynamics
+              <a href="/learn/side-spin-ballistics" class={`text-xs transition-colors ${darkScene ? 'text-slate-400 hover:text-emerald-bright' : 'text-studio-sub hover:text-emerald'}`}>
+                Running &amp; Check Side
               </a>
-              <a href="/learn/collision-angles" class="text-xs text-ivory-muted hover:text-ivory-text transition-colors">
-                The 90-Degree Tangent Line
+              <a href="/learn/cushion-rebounds" class={`text-xs transition-colors ${darkScene ? 'text-slate-400 hover:text-emerald-bright' : 'text-studio-sub hover:text-emerald'}`}>
+                Cushion Restitution
               </a>
             </div>
           </div>
 
-          {/* Sub-footer */}
-          <div class="pt-8 border-t border-surface-subtle flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-mono text-ivory-faint">
-            <div>
-              &copy; {new Date().getFullYear()} {siteConfig.name}. All rights reserved.
-            </div>
-            <div class="flex items-center gap-4">
-              <a href="/about" class="hover:text-ivory-text transition-colors">Architecture</a>
-              <a href="/learn" class="hover:text-ivory-text transition-colors">Curriculum</a>
-              <a href="/play" class="hover:text-brass-primary transition-colors text-brass-muted font-bold">Play Now</a>
+          <div class={`pt-6 border-t flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-mono ${darkScene ? 'border-white/[0.08] text-slate-500' : 'border-studio-border text-studio-faint'}`}>
+            <div>&copy; {new Date().getFullYear()} {siteConfig.name}</div>
+            <div class="flex items-center gap-5">
+              <a href="/about" class="hover:text-emerald-bright transition-colors">Architecture</a>
+              <a href="/learn" class="hover:text-emerald-bright transition-colors">Lectures</a>
+              <a href="/lessons" class="hover:text-emerald-bright transition-colors">Drills</a>
+              <a href="/play" class="text-emerald-bright font-bold hover:underline transition-colors">Open Table</a>
             </div>
           </div>
         </div>

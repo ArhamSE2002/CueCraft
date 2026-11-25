@@ -17,7 +17,8 @@ export class Cushions {
   public static resolveCushionCollision(
     ball: Ball,
     cushion: CushionSegment,
-    spec: CushionSpec = this.DEFAULT_CUSHION
+    spec: CushionSpec = this.DEFAULT_CUSHION,
+    contactOut?: Vector2D
   ): boolean {
     if (ball.potted) return false;
 
@@ -36,7 +37,8 @@ export class Cushions {
       return false;
     }
 
-    const normal = cushion.normal;
+    const isKnuckle = t <= 0.001 || t >= 0.999;
+    const normal = isKnuckle && dist > 1e-4 ? distVec.normalize() : cushion.normal;
     const tangent = normal.perpendicular();
 
     const penetration = ball.radius - dist;
@@ -47,6 +49,11 @@ export class Cushions {
 
     if (vNormal >= 0) {
       return false;
+    }
+
+    if (contactOut) {
+      contactOut.x = closestPoint.x;
+      contactOut.y = closestPoint.y;
     }
 
     const newVNormal = -vNormal * spec.restitution;
@@ -78,7 +85,19 @@ export class Cushions {
   /**
    * Checks if a position is within the throat/mouth of any of the 6 pockets.
    */
-  public static isNearPocket(pos: Vector2D, threshold: number = 95): boolean {
+  public static isNearPocket(
+    pos: Vector2D,
+    threshold: number = 95,
+    table?: SnookerTable
+  ): boolean {
+    if (table) {
+      for (const p of table.pockets) {
+        const limit = Math.max(threshold, p.radius + 45);
+        if (pos.distanceTo(p.position) < limit) return true;
+      }
+      return false;
+    }
+
     const W = SnookerTable.WIDTH;
     const L = SnookerTable.LENGTH;
     const pocketPositions = [
@@ -100,19 +119,20 @@ export class Cushions {
    */
   public static enforceTableBounds(
     ball: Ball,
-    spec: CushionSpec = this.DEFAULT_CUSHION
+    spec: CushionSpec = this.DEFAULT_CUSHION,
+    table?: SnookerTable
   ): void {
     if (ball.potted) return;
 
-    if (this.isNearPocket(ball.position, 95)) {
+    if (this.isNearPocket(ball.position, 95, table)) {
       return;
     }
 
     const R = ball.radius;
     const minX = R;
-    const maxX = SnookerTable.LENGTH - R;
+    const maxX = (table ? table.length : SnookerTable.LENGTH) - R;
     const minY = R;
-    const maxY = SnookerTable.WIDTH - R;
+    const maxY = (table ? table.width : SnookerTable.WIDTH) - R;
 
     let posX = ball.position.x;
     let posY = ball.position.y;

@@ -1,10 +1,12 @@
 import { create } from 'zustand';
 import { Ball } from '../engine/physics/Ball';
 import type { ShotTelemetryLog } from '../engine/physics/PhysicsEngine';
+import type { TableVariant } from '../engine/table/SnookerTable';
 import { TIP_CATALOG } from '../engine/equipment/Equipment';
 
 export type RenderMode = '2d' | '3d';
 export type GameMode = 'practice' | 'championship' | 'lesson';
+export type GameVariant = 'practice' | 'snooker' | '9ball' | '8ball';
 export type InteractionMode = 'aim' | 'move';
 export type ThreeDragMode = 'aim' | 'camera';
 export type CameraViewMode = 'tactical' | 'target' | 'side' | 'overhead' | 'orbit';
@@ -13,6 +15,8 @@ export type CameraFollowMode = 'stiff' | 'follow';
 export interface GameState {
   renderMode: RenderMode;
   gameMode: GameMode;
+  gameVariant: GameVariant;
+  tableVariant: TableVariant;
   interactionMode: InteractionMode;
   threeDragMode: ThreeDragMode;
   threeCameraMode: CameraViewMode;
@@ -53,6 +57,8 @@ export interface GameState {
   // Actions
   setRenderMode: (mode: RenderMode) => void;
   setGameMode: (mode: GameMode) => void;
+  setGameVariant: (variant: GameVariant) => void;
+  setTableVariant: (variant: TableVariant) => void;
   setInteractionMode: (mode: InteractionMode) => void;
   setThreeDragMode: (mode: ThreeDragMode) => void;
   setThreeCameraMode: (cam: CameraViewMode) => void;
@@ -90,6 +96,8 @@ export interface GameState {
 export const useGameStore = create<GameState>((set) => ({
   renderMode: '2d',
   gameMode: 'practice',
+  gameVariant: 'practice',
+  tableVariant: 'snooker',
   interactionMode: 'aim',
   threeDragMode: 'aim',
   threeCameraMode: 'tactical',
@@ -127,6 +135,8 @@ export const useGameStore = create<GameState>((set) => ({
 
   setRenderMode: (renderMode) => set({ renderMode }),
   setGameMode: (gameMode) => set({ gameMode }),
+  setGameVariant: (gameVariant) => set({ gameVariant }),
+  setTableVariant: (tableVariant) => set({ tableVariant }),
   setInteractionMode: (interactionMode) => set({ interactionMode }),
   setThreeDragMode: (threeDragMode) => set({ threeDragMode }),
   setThreeCameraMode: (threeCameraMode) => set({ threeCameraMode }),

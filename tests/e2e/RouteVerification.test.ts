@@ -69,9 +69,13 @@ describe('Astro Build & SSG Route Verification', () => {
     expect(fs.existsSync(astroDir)).toBe(true);
 
     const files = fs.readdirSync(astroDir);
-    // Should include generated JS for GameShell and InteractiveHeroDemo
+    // Should include generated JS for GameShell and homepage interactive showcase island
     const hasGameShell = files.some((f) => f.includes('GameShell') && f.endsWith('.js'));
-    const hasHeroDemo = files.some((f) => f.includes('InteractiveHeroDemo') && f.endsWith('.js'));
+    const hasHeroDemo = files.some(
+      (f) =>
+        (f.includes('HeroThreeScrollExperience') || f.includes('InteractiveHeroDemo')) &&
+        f.endsWith('.js')
+    );
 
     expect(hasGameShell).toBe(true);
     expect(hasHeroDemo).toBe(true);

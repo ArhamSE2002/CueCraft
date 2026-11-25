@@ -32,6 +32,8 @@ export class CanvasTableRenderer {
   private offsetX: number = 0;
   private offsetY: number = 0;
   private currentZoom: number = 1;
+  private activeTableLength: number = SnookerTable.LENGTH;
+  private activeTableWidth: number = SnookerTable.WIDTH;
 
   public options: RendererOptions = {
     showTrajectories: true,
@@ -51,8 +53,17 @@ export class CanvasTableRenderer {
     this.updateDpi();
   }
 
-  public updateDpi(zoom: number = 1.0, panX: number = 0, panY: number = 0): void {
+  public updateDpi(
+    zoom: number = 1.0,
+    panX: number = 0,
+    panY: number = 0,
+    table?: SnookerTable
+  ): void {
     this.currentZoom = zoom;
+    if (table) {
+      this.activeTableLength = table.length;
+      this.activeTableWidth = table.width;
+    }
     this.dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
     const rect = this.canvas.getBoundingClientRect();
     const w = rect.width || 1200;
@@ -63,17 +74,26 @@ export class CanvasTableRenderer {
     this.ctx.resetTransform();
     this.ctx.scale(this.dpr, this.dpr);
 
-    // Calculate base scale factor and centering offsets to fit 3569 x 1778 mm table
-    const totalTableW = SnookerTable.LENGTH + 120;
-    const totalTableH = SnookerTable.WIDTH + 120;
+    this.updateScaleAndOffset(w, h, zoom, panX, panY);
+  }
+
+  private updateScaleAndOffset(
+    w: number,
+    h: number,
+    zoom: number,
+    panX: number,
+    panY: number
+  ): void {
+    const totalTableW = this.activeTableLength + 140;
+    const totalTableH = this.activeTableWidth + 140;
 
     const scaleX = w / totalTableW;
     const scaleY = h / totalTableH;
     const baseScale = Math.min(scaleX, scaleY);
     this.scale = baseScale * zoom;
 
-    this.offsetX = (w - SnookerTable.LENGTH * this.scale) / 2 + panX;
-    this.offsetY = (h - SnookerTable.WIDTH * this.scale) / 2 + panY;
+    this.offsetX = (w - this.activeTableLength * this.scale) / 2 + panX;
+    this.offsetY = (h - this.activeTableWidth * this.scale) / 2 + panY;
   }
 
   /**
@@ -114,20 +134,32 @@ export class CanvasTableRenderer {
     const width = rect.width || 1200;
     const height = rect.height || 650;
 
+    if (
+      table.length !== this.activeTableLength ||
+      table.width !== this.activeTableWidth
+    ) {
+      this.activeTableLength = table.length;
+      this.activeTableWidth = table.width;
+      this.updateScaleAndOffset(width, height, zoomLevel, panOffset.x, panOffset.y);
+    }
+
     ctx.clearRect(0, 0, width, height);
 
-    // 1. Draw Outer Mahogany Wood Rail & Brass Accents
+    // 1. Draw Outer Wood Rail & Accents
     this.drawTableRails(table);
 
-    // 2. Draw Green Baize Cloth & Markings
+    // 2. Draw Baize Cloth & Variant Markings
     this.drawBaize(table);
 
-    // 3. Draw Pocket Mouths & Drops
+    // 3. Draw Visible Segmented Cushions & Pocket Jaws
+    this.drawCushions(table);
+
+    // 4. Draw Pocket Mouths & Drops
     this.drawPockets(table);
 
     // 4. Draw Trajectory Guides & Ghost Ball
     if (this.options.showTrajectories && prediction && isAiming) {
-      this.drawTrajectories(prediction);
+      this.drawTrajectories(prediction, table);
     }
 
     // 5. Draw Balls
@@ -155,89 +187,189 @@ export class CanvasTableRenderer {
 
   private drawTableRails(table: SnookerTable): void {
     const ctx = this.ctx;
-    const margin = 50 * this.scale;
+    const margin = Math.max(46, table.ballRadius * 2.1) * this.scale;
     const x0 = this.offsetX - margin;
     const y0 = this.offsetY - margin;
-    const railW = SnookerTable.LENGTH * this.scale + margin * 2;
-    const railH = SnookerTable.WIDTH * this.scale + margin * 2;
+    const railW = table.length * this.scale + margin * 2;
+    const railH = table.width * this.scale + margin * 2;
 
-    // Rich mahogany outer wood rail
+    // Outer hardwood rail adapted per game table
     const woodGrad = ctx.createLinearGradient(x0, y0, x0 + railW, y0 + railH);
-    woodGrad.addColorStop(0, '#2D1609');
-    woodGrad.addColorStop(0.5, '#40200E');
-    woodGrad.addColorStop(1, '#220F05');
+    woodGrad.addColorStop(0, table.railHex);
+    woodGrad.addColorStop(0.5, table.variant === 'snooker' ? '#4C2612' : '#26303D');
+    woodGrad.addColorStop(1, '#120B08');
 
     ctx.fillStyle = woodGrad;
     ctx.beginPath();
-    ctx.roundRect(x0, y0, railW, railH, 14 * this.scale);
+    ctx.roundRect(x0, y0, railW, railH, 16 * this.scale);
     ctx.fill();
 
-    // Wood bevel edge
-    ctx.strokeStyle = '#5A2E16';
-    ctx.lineWidth = 2 * this.scale;
+    // Subtle brass bevel edge
+    ctx.strokeStyle = table.variant === 'snooker' ? '#6D3A1D' : '#475569';
+    ctx.lineWidth = Math.max(1.5, 2.2 * this.scale);
     ctx.stroke();
 
-    // Inner rubber cushion frame
-    const cushionX = this.offsetX - 10 * this.scale;
-    const cushionY = this.offsetY - 10 * this.scale;
-    const cushionW = SnookerTable.LENGTH * this.scale + 20 * this.scale;
-    const cushionH = SnookerTable.WIDTH * this.scale + 20 * this.scale;
+    // Pool Rail Diamond Sights (9-Ball / 8-Ball)
+    if (table.hasDiamonds) {
+      const topRailY = this.offsetY - margin * 0.52;
+      const botRailY = this.offsetY + table.width * this.scale + margin * 0.52;
+      const leftRailX = this.offsetX - margin * 0.52;
+      const rightRailX = this.offsetX + table.length * this.scale + margin * 0.52;
+      const dSize = Math.max(2.5, 8 * this.scale);
 
-    ctx.fillStyle = '#06170E';
+      const drawDiamond = (cx: number, cy: number) => {
+        ctx.fillStyle = '#E6D6AD';
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - dSize);
+        ctx.lineTo(cx + dSize * 0.65, cy);
+        ctx.lineTo(cx, cy + dSize);
+        ctx.lineTo(cx - dSize * 0.65, cy);
+        ctx.closePath();
+        ctx.fill();
+      };
+
+      for (const f of [0.125, 0.25, 0.375, 0.625, 0.75, 0.875]) {
+        const dx = this.offsetX + table.length * f * this.scale;
+        drawDiamond(dx, topRailY);
+        drawDiamond(dx, botRailY);
+      }
+      for (const f of [0.25, 0.5, 0.75]) {
+        const dy = this.offsetY + table.width * f * this.scale;
+        drawDiamond(leftRailX, dy);
+        drawDiamond(rightRailX, dy);
+      }
+    }
+
+    // Inner cushion liner (under pocket lips & wood bezel)
+    const cushionDepth = Math.max(22, table.ballRadius * 1.15);
+    const cushionX = this.offsetX - cushionDepth * this.scale;
+    const cushionY = this.offsetY - cushionDepth * this.scale;
+    const cushionW = table.length * this.scale + cushionDepth * 2 * this.scale;
+    const cushionH = table.width * this.scale + cushionDepth * 2 * this.scale;
+
+    ctx.fillStyle = '#070E12';
     ctx.fillRect(cushionX, cushionY, cushionW, cushionH);
+  }
+
+  private drawCushions(table: SnookerTable): void {
+    const ctx = this.ctx;
+    const clothBase = this.options.clothSpec?.feltHex2D ?? '#0B2B1E';
+    const cushionDepth = Math.max(22, table.ballRadius * 1.15);
+
+    for (const c of table.cushions) {
+      const s = this.toScreen(c.start);
+      const e = this.toScreen(c.end);
+
+      // Outward vector points away from playing surface into the wooden rail
+      const outX = -c.normal.x * cushionDepth * this.scale;
+      const outY = -c.normal.y * cushionDepth * this.scale;
+
+      // Tangent direction along cushion segment (chamfer back outer corners toward pockets)
+      const dx = e.x - s.x;
+      const dy = e.y - s.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const ux = (dx / len) * 14 * this.scale;
+      const uy = (dy / len) * 14 * this.scale;
+
+      const sOut = { x: s.x + outX - ux * 0.45, y: s.y + outY - uy * 0.45 };
+      const eOut = { x: e.x + outX + ux * 0.45, y: e.y + outY + uy * 0.45 };
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(s.x, s.y);
+      ctx.lineTo(e.x, e.y);
+      ctx.lineTo(eOut.x, eOut.y);
+      ctx.lineTo(sOut.x, sOut.y);
+      ctx.closePath();
+
+      // Gradient from bright crisp cushion nose into deep rail shadow
+      const midIn = { x: (s.x + e.x) / 2, y: (s.y + e.y) / 2 };
+      const midOut = { x: (sOut.x + eOut.x) / 2, y: (sOut.y + eOut.y) / 2 };
+      const cushGrad = ctx.createLinearGradient(midIn.x, midIn.y, midOut.x, midOut.y);
+      cushGrad.addColorStop(0, clothBase);
+      cushGrad.addColorStop(0.35, clothBase);
+      cushGrad.addColorStop(1, 'rgba(4, 9, 12, 0.92)');
+
+      ctx.fillStyle = cushGrad;
+      ctx.fill();
+
+      // Crisp illuminated cushion nose border (distinct separation between cloth bed & rubber bumper!)
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.30)';
+      ctx.lineWidth = Math.max(1.5, 3.2 * this.scale);
+      ctx.beginPath();
+      ctx.moveTo(s.x, s.y);
+      ctx.lineTo(e.x, e.y);
+      ctx.stroke();
+
+      // Subtle jaw outline so pocket entrances read clearly
+      ctx.strokeStyle = 'rgba(226, 184, 87, 0.35)';
+      ctx.lineWidth = Math.max(1, 1.5 * this.scale);
+      ctx.beginPath();
+      ctx.moveTo(s.x, s.y);
+      ctx.lineTo(sOut.x, sOut.y);
+      ctx.moveTo(e.x, e.y);
+      ctx.lineTo(eOut.x, eOut.y);
+      ctx.stroke();
+
+      ctx.restore();
+    }
   }
 
   private drawBaize(table: SnookerTable): void {
     const ctx = this.ctx;
     const x = this.offsetX;
     const y = this.offsetY;
-    const w = SnookerTable.LENGTH * this.scale;
-    const h = SnookerTable.WIDTH * this.scale;
+    const w = table.length * this.scale;
+    const h = table.width * this.scale;
 
     const clothBase = this.options.clothSpec?.feltHex2D ?? '#0B2B1E';
     const baizeGrad = ctx.createRadialGradient(
       x + w * 0.5,
       y + h * 0.5,
-      h * 0.2,
+      h * 0.18,
       x + w * 0.5,
       y + h * 0.5,
-      w * 0.7
+      w * 0.72
     );
     baizeGrad.addColorStop(0, clothBase);
-    baizeGrad.addColorStop(0.75, clothBase);
-    baizeGrad.addColorStop(1, '#061A11');
+    baizeGrad.addColorStop(0.76, clothBase);
+    baizeGrad.addColorStop(1, '#070E12');
 
     ctx.fillStyle = baizeGrad;
     ctx.fillRect(x, y, w, h);
 
     // Inner cushion shadow
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
-    ctx.lineWidth = 4 * this.scale;
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.42)';
+    ctx.lineWidth = Math.max(2, 4 * this.scale);
     ctx.strokeRect(x, y, w, h);
 
-    // Baulk Line (White cloth marking at X = 737 mm)
-    const baulkScreenX = this.offsetX + SnookerTable.BAULK_DIST * this.scale;
-    ctx.strokeStyle = 'rgba(245, 242, 235, 0.45)';
-    ctx.lineWidth = 1.5 * this.scale;
+    // Baulk / Head String Line
+    const baulkScreenX = this.offsetX + table.baulkDist * this.scale;
+    ctx.strokeStyle = 'rgba(245, 242, 235, 0.38)';
+    ctx.lineWidth = Math.max(1, 1.5 * this.scale);
     ctx.beginPath();
     ctx.moveTo(baulkScreenX, y);
     ctx.lineTo(baulkScreenX, y + h);
     ctx.stroke();
 
-    // The "D" (Semicircle facing away from baulk cushion, radius 292 mm)
-    const dCenter = this.toScreen(SnookerTable.SPOTS.BROWN);
-    const dRadius = SnookerTable.D_RADIUS * this.scale;
-    ctx.beginPath();
-    ctx.arc(dCenter.x, dCenter.y, dRadius, Math.PI * 0.5, Math.PI * 1.5, false);
-    ctx.stroke();
-
-    // Spot markings (subtle dots)
-    ctx.fillStyle = 'rgba(245, 242, 235, 0.6)';
-    const spotKeys = Object.keys(SnookerTable.SPOTS) as (keyof typeof SnookerTable.SPOTS)[];
-    for (const key of spotKeys) {
-      const spotPos = this.toScreen(SnookerTable.SPOTS[key]);
+    // Snooker "D" Semicircle
+    if (table.hasBaulkAndD && table.dRadius > 0) {
+      const dCenter = this.toScreen(table.spots.BROWN);
+      const dRadius = table.dRadius * this.scale;
       ctx.beginPath();
-      ctx.arc(spotPos.x, spotPos.y, 2 * this.scale, 0, Math.PI * 2);
+      ctx.arc(dCenter.x, dCenter.y, dRadius, Math.PI * 0.5, Math.PI * 1.5, false);
+      ctx.stroke();
+    }
+
+    // Spot markings (Snooker all spots; Pool center + foot spot)
+    ctx.fillStyle = 'rgba(245, 242, 235, 0.55)';
+    const spotList = table.hasBaulkAndD
+      ? Object.values(table.spots)
+      : [table.spots.BLUE, table.spots.PINK];
+    for (const sp of spotList) {
+      const spotPos = this.toScreen(sp);
+      ctx.beginPath();
+      ctx.arc(spotPos.x, spotPos.y, Math.max(1.8, 3 * this.scale), 0, Math.PI * 2);
       ctx.fill();
     }
   }
@@ -269,7 +401,7 @@ export class CanvasTableRenderer {
     }
   }
 
-  private drawTrajectories(prediction: TrajectoryPrediction): void {
+  private drawTrajectories(prediction: TrajectoryPrediction, table: SnookerTable): void {
     const ctx = this.ctx;
     const sPx = (logicalMm: number, minPx: number) => Math.max(minPx, logicalMm * this.scale);
 
@@ -325,7 +457,7 @@ export class CanvasTableRenderer {
     // 2. Ghost Ball with crisp contact reticle
     if (this.options.showGhostBall && prediction.ghostBall) {
       const gp = this.toScreen(prediction.ghostBall);
-      const r = SnookerTable.BALL_RADIUS * this.scale;
+      const r = table.ballRadius * this.scale;
 
       ctx.save();
       ctx.strokeStyle = '#2DD4BF';
@@ -392,7 +524,7 @@ export class CanvasTableRenderer {
         });
 
         const endScreen = this.toScreen(obj.endPos);
-        const r = SnookerTable.BALL_RADIUS * this.scale;
+        const r = table.ballRadius * this.scale;
         ctx.save();
         ctx.strokeStyle = strokeHex;
         ctx.lineWidth = Math.max(1.8, 4 * this.scale);
@@ -456,7 +588,7 @@ export class CanvasTableRenderer {
     // 5. Predicted Cue Final Resting Position Ring (when fullRoute is active)
     if (prediction.fullRoute && prediction.cueFinalPos) {
       const fp = this.toScreen(prediction.cueFinalPos);
-      const r = SnookerTable.BALL_RADIUS * this.scale;
+      const r = table.ballRadius * this.scale;
       ctx.save();
       ctx.strokeStyle = 'rgba(255, 253, 245, 0.78)';
       ctx.lineWidth = Math.max(1.8, 4 * this.scale);
@@ -475,38 +607,83 @@ export class CanvasTableRenderer {
     const info = ball.colorInfo;
 
     // Drop shadow
-    ctx.fillStyle = 'rgba(2, 8, 4, 0.45)';
+    ctx.fillStyle = 'rgba(2, 8, 4, 0.48)';
     ctx.beginPath();
     ctx.ellipse(p.x + r * 0.25, p.y + r * 0.3, r * 1.05, r * 0.85, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // 3D Sphere Spherical Gradient
-    const ballGrad = ctx.createRadialGradient(
-      p.x - r * 0.35,
-      p.y - r * 0.35,
-      r * 0.1,
-      p.x,
-      p.y,
-      r
-    );
-    ballGrad.addColorStop(0, info.specularHex);
-    ballGrad.addColorStop(0.4, info.hex);
-    ballGrad.addColorStop(1, '#050709');
+    if (ball.isStripe) {
+      // Ivory spherical base + crisp color stripe band
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      ctx.clip();
 
-    ctx.fillStyle = ballGrad;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-    ctx.fill();
+      const ivoryGrad = ctx.createRadialGradient(
+        p.x - r * 0.35,
+        p.y - r * 0.35,
+        r * 0.08,
+        p.x,
+        p.y,
+        r
+      );
+      ivoryGrad.addColorStop(0, '#FFFFFF');
+      ivoryGrad.addColorStop(0.6, '#F4EFE4');
+      ivoryGrad.addColorStop(1, '#4B473E');
+      ctx.fillStyle = ivoryGrad;
+      ctx.fillRect(p.x - r, p.y - r, r * 2, r * 2);
+
+      // Colored center belt with spherical shading
+      const bandGrad = ctx.createLinearGradient(p.x - r, p.y - r * 0.52, p.x + r, p.y + r * 0.52);
+      bandGrad.addColorStop(0, info.specularHex);
+      bandGrad.addColorStop(0.45, info.hex);
+      bandGrad.addColorStop(1, '#090C10');
+      ctx.fillStyle = bandGrad;
+      ctx.fillRect(p.x - r, p.y - r * 0.54, r * 2, r * 1.08);
+      ctx.restore();
+    } else {
+      // 3D Sphere Spherical Gradient
+      const ballGrad = ctx.createRadialGradient(
+        p.x - r * 0.35,
+        p.y - r * 0.35,
+        r * 0.1,
+        p.x,
+        p.y,
+        r
+      );
+      ballGrad.addColorStop(0, info.specularHex);
+      ballGrad.addColorStop(0.42, info.hex);
+      ballGrad.addColorStop(1, '#050709');
+
+      ctx.fillStyle = ballGrad;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Pool ball crisp number badge
+    if (ball.number !== undefined) {
+      ctx.fillStyle = '#FAF8F2';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r * 0.45, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#0F141A';
+      ctx.font = `700 ${Math.max(7, r * 0.62).toFixed(1)}px "JetBrains Mono", monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(ball.number), p.x, p.y + 0.5);
+    }
 
     // Specular highlight spot
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.82)';
     ctx.beginPath();
-    ctx.arc(p.x - r * 0.3, p.y - r * 0.3, r * 0.22, 0, Math.PI * 2);
+    ctx.arc(p.x - r * 0.3, p.y - r * 0.3, r * 0.2, 0, Math.PI * 2);
     ctx.fill();
 
     // Cue ball spin indicator dot
     if (ball.type === 'cue' && (Math.abs(ball.spin.pitch) > 1 || Math.abs(ball.spin.yaw) > 1)) {
-      ctx.fillStyle = 'rgba(239, 68, 68, 0.8)';
+      ctx.fillStyle = 'rgba(239, 68, 68, 0.85)';
       ctx.beginPath();
       ctx.arc(p.x, p.y, r * 0.2, 0, Math.PI * 2);
       ctx.fill();
@@ -518,53 +695,210 @@ export class CanvasTableRenderer {
     const p = this.toScreen(cueBall.position);
     const r = cueBall.radius * this.scale;
 
-    // Pullback offset based on shot power
-    const pullback = (12 + (powerPercent / 100) * 65) * this.scale;
-    const cueLength = 480 * this.scale;
-    const tipWidth = 5 * this.scale;
-    const buttWidth = 14 * this.scale;
+    // Regulation 57-inch (1450 mm) slender championship cue proportions
+    const pullback = (10 + (powerPercent / 100) * 85) * this.scale;
+    const cueLength = 1380 * this.scale;
+    const tipHalfW = Math.max(1.4, 4.6 * this.scale);
+    const jointHalfW = Math.max(2.6, 10.0 * this.scale);
+    const buttHalfW = Math.max(3.6, 14.5 * this.scale);
 
     const backAngle = aimAngleRad + Math.PI;
-    const tipX = p.x + Math.cos(backAngle) * (r + pullback);
-    const tipY = p.y + Math.sin(backAngle) * (r + pullback);
+    const dirX = Math.cos(backAngle);
+    const dirY = Math.sin(backAngle);
+    const nx = -dirY;
+    const ny = dirX;
 
-    const buttX = tipX + Math.cos(backAngle) * cueLength;
-    const buttY = tipY + Math.sin(backAngle) * cueLength;
+    const tipDist = r + pullback;
+    const pt = (d: number) => ({ x: p.x + dirX * d, y: p.y + dirY * d });
 
-    const normal = new Vector2D(-Math.sin(backAngle), Math.cos(backAngle));
+    const tipFaceDist = tipDist;
+    const ferruleStartDist = tipDist + 4.5 * this.scale;
+    const shaftStartDist = tipDist + 14 * this.scale;
+    const jointDist = tipDist + cueLength * 0.72; // 3/4 championship joint split
+    const buttEndDist = tipDist + cueLength;
 
+    const chalkFace = pt(tipFaceDist);
+    const ferruleStart = pt(ferruleStartDist);
+    const shaftStart = pt(shaftStartDist);
+    const jointPos = pt(jointDist);
+    const buttEnd = pt(buttEndDist);
+
+    const isCarbon = this.options.cueSpec?.id === 'carbon-low-deflect';
+    const shaftCol = this.options.cueSpec?.shaftColor ?? '#E8CC99';
+    const buttCol = this.options.cueSpec?.buttColor ?? '#1E110A';
+    const tipCol = this.options.tipSpec?.colorHex ?? '#1D4ED8';
+
+    ctx.save();
+
+    // Helper for tapered 3D-shaded cylinder section
+    const drawTaperSection = (
+      a: { x: number; y: number },
+      b: { x: number; y: number },
+      rA: number,
+      rB: number,
+      cDark: string,
+      cHighlight: string,
+      cBase: string
+    ) => {
+      const midX = (a.x + b.x) / 2;
+      const midY = (a.y + b.y) / 2;
+      const midW = (rA + rB) / 2;
+      const crossGrad = ctx.createLinearGradient(
+        midX - nx * midW,
+        midY - ny * midW,
+        midX + nx * midW,
+        midY + ny * midW
+      );
+      crossGrad.addColorStop(0, cDark);
+      crossGrad.addColorStop(0.25, cHighlight);
+      crossGrad.addColorStop(0.6, cBase);
+      crossGrad.addColorStop(1, cDark);
+
+      ctx.fillStyle = crossGrad;
+      ctx.beginPath();
+      ctx.moveTo(a.x + nx * rA, a.y + ny * rA);
+      ctx.lineTo(b.x + nx * rB, b.y + ny * rB);
+      ctx.lineTo(b.x - nx * rB, b.y - ny * rB);
+      ctx.lineTo(a.x - nx * rA, a.y - ny * rA);
+      ctx.closePath();
+      ctx.fill();
+    };
+
+    // 1. Sleek tapered cast cloth shadow (grounded, proportional)
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.34)';
     ctx.beginPath();
-    ctx.moveTo(tipX + normal.x * (tipWidth / 2), tipY + normal.y * (tipWidth / 2));
-    ctx.lineTo(buttX + normal.x * (buttWidth / 2), buttY + normal.y * (buttWidth / 2));
-    ctx.lineTo(buttX - normal.x * (buttWidth / 2), buttY - normal.y * (buttWidth / 2));
-    ctx.lineTo(tipX - normal.x * (tipWidth / 2), tipY - normal.y * (tipWidth / 2));
+    ctx.moveTo(ferruleStart.x + 5 * this.scale + nx * tipHalfW, ferruleStart.y + 8 * this.scale + ny * tipHalfW);
+    ctx.lineTo(buttEnd.x + 12 * this.scale + nx * buttHalfW, buttEnd.y + 18 * this.scale + ny * buttHalfW);
+    ctx.lineTo(buttEnd.x + 12 * this.scale - nx * buttHalfW, buttEnd.y + 18 * this.scale - ny * buttHalfW);
+    ctx.lineTo(ferruleStart.x + 5 * this.scale - nx * tipHalfW, ferruleStart.y + 8 * this.scale - ny * tipHalfW);
     ctx.closePath();
-
-    const cueGrad = ctx.createLinearGradient(tipX, tipY, buttX, buttY);
-    cueGrad.addColorStop(0, this.options.cueSpec?.shaftColor ?? '#E6D3AC');
-    cueGrad.addColorStop(0.38, this.options.cueSpec?.shaftColor ?? '#C49E65');
-    cueGrad.addColorStop(0.72, this.options.cueSpec?.buttColor ?? '#522E14');
-    cueGrad.addColorStop(1, '#1A0E06');
-
-    ctx.fillStyle = cueGrad;
     ctx.fill();
 
-    // Brass ferrule & chalk tip (dynamic tip color)
-    ctx.strokeStyle = '#C5A059';
-    ctx.lineWidth = 3 * this.scale;
+    // 2. Main Playing Shaft (Ash grain or Carbon weave)
+    drawTaperSection(
+      shaftStart,
+      jointPos,
+      tipHalfW * 1.02,
+      jointHalfW,
+      isCarbon ? '#12151B' : '#8B683A',
+      isCarbon ? '#4B5563' : '#FAF0DC',
+      shaftCol
+    );
+
+    // Feathered North American Ash chevron grain striations (or subtle carbon sheen ticks)
+    ctx.strokeStyle = isCarbon ? 'rgba(255, 255, 255, 0.08)' : 'rgba(110, 74, 30, 0.19)';
+    ctx.lineWidth = Math.max(0.7, 1.3 * this.scale);
+    for (let i = 1; i <= 14; i++) {
+      const f = i / 16;
+      const dist = shaftStartDist + (jointDist - shaftStartDist) * f;
+      const cPt = pt(dist);
+      const localHalfW = (tipHalfW * 1.02 + (jointHalfW - tipHalfW * 1.02) * f) * 0.85;
+      const vBack = pt(dist + 22 * this.scale);
+      ctx.beginPath();
+      ctx.moveTo(vBack.x + nx * localHalfW, vBack.y + ny * localHalfW);
+      ctx.lineTo(cPt.x, cPt.y);
+      ctx.lineTo(vBack.x - nx * localHalfW, vBack.y - ny * localHalfW);
+      ctx.stroke();
+    }
+
+    // 3. Hand-Spliced Hardwood Butt Handle + Twin Decorative Veneer Splice Points
+    drawTaperSection(
+      jointPos,
+      buttEnd,
+      jointHalfW,
+      buttHalfW,
+      '#080605',
+      '#5A3925',
+      buttCol
+    );
+
+    // Two sharp rosewood/gold veneer splice chevrons projecting cleanly past the butt collar
+    const drawVeneerDart = (startFrac: number, peakFrac: number, widthRatio: number, fillHex: string) => {
+      const a = pt(tipDist + cueLength * startFrac);
+      const peak = pt(tipDist + cueLength * peakFrac);
+      const tail = pt(tipDist + cueLength * 0.96);
+      const wSpan = (jointHalfW + (buttHalfW - jointHalfW) * ((startFrac - 0.72) / 0.28)) * widthRatio;
+      ctx.fillStyle = fillHex;
+      ctx.beginPath();
+      ctx.moveTo(peak.x, peak.y);
+      ctx.lineTo(a.x + nx * wSpan, a.y + ny * wSpan);
+      ctx.lineTo(tail.x + nx * wSpan * 0.9, tail.y + ny * wSpan * 0.9);
+      ctx.lineTo(tail.x - nx * wSpan * 0.9, tail.y - ny * wSpan * 0.9);
+      ctx.lineTo(a.x - nx * wSpan, a.y - ny * wSpan);
+      ctx.closePath();
+      ctx.fill();
+    };
+    drawVeneerDart(0.84, 0.75, 0.88, '#D97706'); // Outer maple/amber veneer trim
+    drawVeneerDart(0.86, 0.77, 0.72, '#10B981'); // Emerald accent pinstripe
+    drawVeneerDart(0.875, 0.79, 0.56, '#0D0B0A'); // Ebony core heartwood
+
+    // Minimalist Brass Maker Nameplate on Butt Handle
+    const plateA = pt(tipDist + cueLength * 0.905);
+    const plateB = pt(tipDist + cueLength * 0.945);
+    drawTaperSection(plateA, plateB, buttHalfW * 0.42, buttHalfW * 0.42, '#785A28', '#F6DF9F', '#C5A059');
+
+    // 4. 3/4 Brass Quick-Release Joint Collar with Dark Phenolic Flanks
+    const jointRimA = pt(jointDist - 12 * this.scale);
+    const jointRimB = pt(jointDist + 14 * this.scale);
+    drawTaperSection(jointRimA, jointRimB, jointHalfW * 0.99, jointHalfW * 1.03, '#111317', '#333A45', '#1C2026');
+    const brassCoreA = pt(jointDist - 6 * this.scale);
+    const brassCoreB = pt(jointDist + 8 * this.scale);
+    drawTaperSection(brassCoreA, brassCoreB, jointHalfW * 1.01, jointHalfW * 1.03, '#7C5E28', '#FCE6A4', '#D4B06A');
+
+    // 5. Machined Butt Collar + Black Rubber Bumper Cap
+    const bumperStart = pt(tipDist + cueLength * 0.978);
+    drawTaperSection(
+      pt(tipDist + cueLength * 0.968),
+      bumperStart,
+      buttHalfW * 0.99,
+      buttHalfW * 0.99,
+      '#7C5E28',
+      '#FCE6A4',
+      '#D4B06A'
+    );
+    drawTaperSection(bumperStart, buttEnd, buttHalfW * 0.96, buttHalfW * 0.78, '#050608', '#333A45', '#15181E');
+
+    // 6. Precision Machined Brass Ferrule + Fiber Pad
+    drawTaperSection(
+      ferruleStart,
+      shaftStart,
+      tipHalfW * 1.01,
+      tipHalfW * 1.02,
+      '#7C5E28',
+      '#FCE6A4',
+      '#D4B06A'
+    );
+
+    // 7. Domed Multi-Layered Chalked Tip (Elk / Phenolic)
+    ctx.fillStyle = tipCol;
     ctx.beginPath();
-    ctx.moveTo(tipX + normal.x * (tipWidth / 2), tipY + normal.y * (tipWidth / 2));
-    ctx.lineTo(tipX - normal.x * (tipWidth / 2), tipY - normal.y * (tipWidth / 2));
+    ctx.arc(
+      chalkFace.x + dirX * (2 * this.scale),
+      chalkFace.y + dirY * (2 * this.scale),
+      tipHalfW,
+      backAngle - Math.PI / 2,
+      backAngle + Math.PI / 2,
+      true
+    );
+    ctx.lineTo(ferruleStart.x - nx * tipHalfW, ferruleStart.y - ny * tipHalfW);
+    ctx.lineTo(ferruleStart.x + nx * tipHalfW, ferruleStart.y + ny * tipHalfW);
+    ctx.closePath();
+    ctx.fill();
+
+    // Subtle chalk-dust rim highlight on tip crown
+    ctx.strokeStyle = 'rgba(186, 230, 253, 0.55)';
+    ctx.lineWidth = Math.max(0.8, 1.2 * this.scale);
+    ctx.beginPath();
+    ctx.arc(
+      chalkFace.x + dirX * (2 * this.scale),
+      chalkFace.y + dirY * (2 * this.scale),
+      tipHalfW * 0.85,
+      backAngle + Math.PI * 0.65,
+      backAngle + Math.PI * 1.35
+    );
     ctx.stroke();
 
-    ctx.strokeStyle = this.options.tipSpec?.colorHex ?? '#2563EB';
-    ctx.lineWidth = 2 * this.scale;
-    const chalkX = tipX - Math.cos(backAngle) * (2 * this.scale);
-    const chalkY = tipY - Math.sin(backAngle) * (2 * this.scale);
-    ctx.beginPath();
-    ctx.moveTo(chalkX + normal.x * (tipWidth / 2), chalkY + normal.y * (tipWidth / 2));
-    ctx.lineTo(chalkX - normal.x * (tipWidth / 2), chalkY - normal.y * (tipWidth / 2));
-    ctx.stroke();
+    ctx.restore();
   }
 
   private drawArrowHead(from: Vector2D, to: Vector2D, color: string): void {

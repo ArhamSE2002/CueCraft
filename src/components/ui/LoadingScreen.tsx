@@ -49,20 +49,18 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex flex-col items-center justify-center bg-surface-base transition-opacity duration-500 ${
+      className={`fixed inset-0 z-50 flex flex-col items-center justify-center bg-arena-bg transition-opacity duration-500 ${
         phase === 'in' ? 'opacity-0' : phase === 'hold' ? 'opacity-100' : 'opacity-0 pointer-events-none'
       }`}
       aria-live="polite"
       aria-label="Loading CueCraft"
     >
-      {/* Felt texture layer */}
+      {/* Dot Grid layer */}
       <div
-        className="absolute inset-0 opacity-[0.04]"
+        className="absolute inset-0 opacity-[0.06]"
         style={{
-          backgroundImage: `repeating-linear-gradient(
-            0deg, transparent, transparent 2px,
-            rgba(255,255,255,0.1) 2px, rgba(255,255,255,0.1) 4px
-          )`,
+          backgroundImage: 'radial-gradient(#94A3B8 1px, transparent 1px)',
+          backgroundSize: '24px 24px',
         }}
       />
 
@@ -71,29 +69,29 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({
         {/* Animated cue ball icon */}
         <div className="relative w-20 h-20">
           {/* Outer glow ring */}
-          <div className="absolute inset-0 rounded-full bg-brass-primary/10 animate-ping" />
+          <div className="absolute inset-0 rounded-full bg-emerald-bright/15 animate-ping" />
           {/* Ball body */}
           <div
             className="relative w-20 h-20 rounded-full"
             style={{
-              background: 'radial-gradient(circle at 35% 35%, #F7F5EE 0%, #D4CFC4 40%, #3A3832 100%)',
-              boxShadow: '0 0 32px rgba(197,160,89,0.3), 0 8px 32px rgba(0,0,0,0.6)',
+              background: 'radial-gradient(circle at 35% 35%, #FFFFFF 0%, #CBD5E1 48%, #334155 100%)',
+              boxShadow: '0 0 32px rgba(16,185,129,0.28), 0 8px 32px rgba(0,0,0,0.65)',
             }}
           >
             {/* Specular highlight */}
             <div
-              className="absolute rounded-full bg-white/70"
+              className="absolute rounded-full bg-white/80"
               style={{ width: '28%', height: '28%', top: '18%', left: '20%' }}
             />
-            {/* Red dot to indicate spin contact point */}
+            {/* Spin contact marker */}
             <div
-              className="absolute rounded-full bg-red-500/80"
+              className="absolute rounded-full bg-emerald-bright"
               style={{ width: '18%', height: '18%', top: '41%', left: '41%' }}
             />
           </div>
           {/* Rolling animation ring */}
           <div
-            className="absolute inset-[-6px] rounded-full border-2 border-brass-primary/40 animate-spin"
+            className="absolute inset-[-6px] rounded-full border-2 border-emerald-bright/45 animate-spin"
             style={{ animationDuration: '2.4s' }}
           />
         </div>

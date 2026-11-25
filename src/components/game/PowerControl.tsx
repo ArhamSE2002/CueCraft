@@ -13,13 +13,13 @@ export const PowerControl: React.FC = () => {
   ];
 
   return (
-    <div className="flex flex-col bg-surface-card border border-surface-subtle p-2.5 rounded-xl shadow-lg w-full max-w-[210px]">
+    <div className="flex flex-col bg-arena-panel border border-arena-border p-2.5 rounded-2xl w-full max-w-[215px]">
       <div className="flex items-center justify-between mb-1">
-        <span className="text-[11px] uppercase tracking-wider font-semibold text-brass-primary flex items-center gap-1">
-          <Zap className="w-3.5 h-3.5 text-brass-primary" />
-          Cue Power
+        <span className="text-[11px] font-mono uppercase tracking-wider font-semibold text-emerald-bright flex items-center gap-1">
+          <Zap className="w-3.5 h-3.5 text-emerald-bright" />
+          Power
         </span>
-        <span className="font-mono text-sm font-bold text-ivory-text tabular-nums">
+        <span className="font-mono text-sm font-bold text-white tabular-nums">
           {power}%
         </span>
       </div>
@@ -32,7 +32,7 @@ export const PowerControl: React.FC = () => {
           max="100"
           value={power}
           onChange={(e) => setPower(Number(e.target.value))}
-          className="w-full h-2.5 bg-surface-base rounded-lg appearance-none cursor-pointer accent-brass-primary focus:outline-none"
+          className="w-full h-2 bg-arena-bg rounded-full appearance-none cursor-pointer accent-emerald-bright focus:outline-none"
         />
       </div>
 
@@ -40,7 +40,7 @@ export const PowerControl: React.FC = () => {
       <div className="flex items-center justify-between gap-1 mt-1">
         <button
           onClick={() => setPower(power - 2)}
-          className="p-1.5 rounded bg-surface-elevated hover:bg-surface-subtle text-ivory-muted hover:text-ivory-text transition-colors border border-surface-subtle"
+          className="p-1.5 rounded-lg bg-arena-elevated hover:bg-arena-border text-arena-muted hover:text-white transition-colors"
           title="Decrease power by 2%"
         >
           <Minus className="w-3.5 h-3.5" />
@@ -51,10 +51,10 @@ export const PowerControl: React.FC = () => {
             <button
               key={preset.label}
               onClick={() => setPower(preset.value)}
-              className={`text-[10px] py-1 px-0.5 rounded border transition-colors ${
+              className={`text-[10px] py-1 px-0.5 rounded-lg border transition-colors ${
                 Math.abs(power - preset.value) <= 4
-                  ? 'bg-brass-primary text-surface-base font-bold border-brass-primary'
-                  : 'border-surface-subtle text-ivory-muted hover:bg-surface-elevated'
+                  ? 'bg-emerald-bright text-arena-bg font-bold border-emerald-bright'
+                  : 'border-arena-border text-arena-muted hover:bg-arena-elevated'
               }`}
             >
               {preset.label}
@@ -64,7 +64,7 @@ export const PowerControl: React.FC = () => {
 
         <button
           onClick={() => setPower(power + 2)}
-          className="p-1.5 rounded bg-surface-elevated hover:bg-surface-subtle text-ivory-muted hover:text-ivory-text transition-colors border border-surface-subtle"
+          className="p-1.5 rounded-lg bg-arena-elevated hover:bg-arena-border text-arena-muted hover:text-white transition-colors"
           title="Increase power by 2%"
         >
           <Plus className="w-3.5 h-3.5" />

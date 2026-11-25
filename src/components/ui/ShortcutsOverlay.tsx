@@ -28,13 +28,13 @@ export const ShortcutsOverlay: React.FC<ShortcutsOverlayProps> = ({ onClose }) =
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-sm mx-4 bg-surface-card border border-surface-subtle rounded-2xl shadow-2xl p-6"
+        className="relative w-full max-w-sm mx-4 bg-arena-panel border border-arena-border rounded-3xl shadow-2xl p-6 text-arena-text"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2">
-            <Keyboard className="w-4 h-4 text-brass-primary" />
-            <h2 className="font-serif text-sm font-bold tracking-wider text-ivory-text uppercase">
+            <Keyboard className="w-4 h-4 text-emerald-bright" />
+            <h2 className="font-display text-sm font-bold tracking-wider text-white uppercase">
               Keyboard Shortcuts
             </h2>
           </div>

@@ -1,6 +1,6 @@
 import { Vector2D } from '../math/Vector2D';
-import { SnookerTable, type Pocket } from '../table/SnookerTable';
-import { Ball } from './Ball';
+import { SnookerTable, type Pocket, type TableVariant } from '../table/SnookerTable';
+import { Ball, type BallType } from './Ball';
 import { Cloth } from './Cloth';
 import { Collisions, type CollisionEvent } from './Collisions';
 import { Cushions } from './Cushions';
@@ -87,6 +87,7 @@ export class PhysicsEngine {
   public table: SnookerTable;
   public balls: Ball[] = [];
   public isSimulating: boolean = false;
+  public isGhostSimulation: boolean = false;
 
   // Live configurable equipment & table physics
   public clothConfig: ClothSpec = CLOTH_CATALOG[1];
@@ -123,9 +124,16 @@ export class PhysicsEngine {
   private cachedKey: string = '';
   private cachedPrediction: TrajectoryPrediction | null = null;
 
-  constructor() {
-    this.table = new SnookerTable();
+  constructor(variant: TableVariant = 'snooker') {
+    this.table = new SnookerTable(variant);
     this.setupPracticeRack();
+  }
+
+  public setTableVariant(variant: TableVariant): void {
+    if (this.table.variant === variant) return;
+    this.table = new SnookerTable(variant);
+    this.isSimulating = false;
+    this.invalidatePredictionCache();
   }
 
   public get cueBall(): Ball | undefined {
@@ -297,8 +305,8 @@ export class PhysicsEngine {
     fixedDt: number = PhysicsEngine.FIXED_DT,
     subSteps: number = 4,
     emitCallbacks: boolean = true,
-    onCueCushionHit?: () => void,
-    onBallCushionHit?: (ballId: string) => void
+    onCueCushionHit?: (contactPoint?: Vector2D) => void,
+    onBallCushionHit?: (ballId: string, contactPoint?: Vector2D) => void
   ): void {
     const subDt = fixedDt / subSteps;
 
@@ -332,15 +340,16 @@ export class PhysicsEngine {
       for (const ball of this.balls) {
         if (ball.potted) continue;
         let hitCushion = false;
+        const contactPt = new Vector2D(0, 0);
         for (const cushion of this.table.cushions) {
-          if (Cushions.resolveCushionCollision(ball, cushion, this.cushionConfig)) {
+          if (Cushions.resolveCushionCollision(ball, cushion, this.cushionConfig, contactPt)) {
             hitCushion = true;
           }
         }
-        Cushions.enforceTableBounds(ball, this.cushionConfig);
+        Cushions.enforceTableBounds(ball, this.cushionConfig, this.table);
         if (hitCushion) {
-          if (ball.type === 'cue' && onCueCushionHit) onCueCushionHit();
-          if (ball.type !== 'cue' && onBallCushionHit) onBallCushionHit(ball.id);
+          if (ball.type === 'cue' && onCueCushionHit) onCueCushionHit(contactPt.clone());
+          if (ball.type !== 'cue' && onBallCushionHit) onBallCushionHit(ball.id, contactPt.clone());
         }
       }
 
@@ -363,9 +372,9 @@ export class PhysicsEngine {
           if (distToPocket <= captureRadius) {
             if (ball.type === 'cue') {
               ball.stop();
-              if (emitCallbacks) {
-                this.placeCueBall(new Vector2D(737, SnookerTable.WIDTH / 2));
-                const msg = `FOUL: In-off into ${pocket.name}. Penalty: -4 points. Cue ball placed in the 'D'.`;
+              if (emitCallbacks && !this.isGhostSimulation) {
+                this.placeCueBall(new Vector2D(this.table.baulkDist, this.table.width / 2));
+                const msg = `FOUL: In-off into ${pocket.name}. Penalty: -4 points. Cue ball placed back in baulk.`;
                 if (this.activeShotTracking) {
                   this.activeShotTracking.foulMessage = msg;
                 }
@@ -373,10 +382,12 @@ export class PhysicsEngine {
                   this.onFoul({ type: 'in-off', penalty: 4, message: msg });
                 }
               } else {
+                ball.position = pocket.position.clone();
                 ball.potted = true;
                 ball.pottedInPocket = pocket.id;
               }
             } else {
+              ball.position = pocket.position.clone();
               ball.potted = true;
               ball.pottedInPocket = pocket.id;
               ball.stop();
@@ -518,11 +529,11 @@ export class PhysicsEngine {
       .filter((b) => !b.potted)
       .map((b) => `${b.id}:${b.position.x.toFixed(1)},${b.position.y.toFixed(1)}`)
       .join('|');
-    const key = `${ballSig}#${angleRad.toFixed(5)}#${power}#${spinX.toFixed(2)}#${spinY.toFixed(
+    const key = `${this.table.variant}#${ballSig}#${angleRad.toFixed(5)}#${power}#${spinX.toFixed(
       2
-    )}#${cueElevationDeg}#${fullRoute}#${this.clothConfig.id}#${this.cushionConfig.id}#${
-      this.cueConfig.id
-    }#${this.tipConfig.id}`;
+    )}#${spinY.toFixed(2)}#${cueElevationDeg}#${fullRoute}#${this.clothConfig.id}#${
+      this.cushionConfig.id
+    }#${this.cueConfig.id}#${this.tipConfig.id}`;
 
     if (this.cachedKey === key && this.cachedPrediction) {
       return this.cachedPrediction;
@@ -588,9 +599,16 @@ export class PhysicsEngine {
         const tangent = normal.perpendicular();
         const rayDir = Vector2D.fromAngle(effectiveAngleRad, 1);
         const cutCos = Math.max(0, Math.min(1, rayDir.dot(normal)));
+        const maxObjDist = Math.max(160, (effectivePower / 100) * 2000 * cutCos);
+        const objEndpoint = this.rayCastEndpoint(
+          firstRayInfo.targetBall.position,
+          normal,
+          maxObjDist,
+          firstRayInfo.targetBall.radius
+        );
         pred.targetPath.push({
           start: firstRayInfo.targetBall.position.clone(),
-          end: firstRayInfo.targetBall.position.add(normal.scale(Math.max(160, (effectivePower / 100) * 2000 * cutCos))),
+          end: objEndpoint?.hitPoint ?? firstRayInfo.targetBall.position.add(normal.scale(maxObjDist)),
           type: 'target',
           bounce: 0,
         });
@@ -604,14 +622,23 @@ export class PhysicsEngine {
           deflectionVec = deflectionVec.add(normal.scale(spinY * speed * 0.65 * cutCos));
         }
         if (deflectionVec.length() > 15) {
+          const defDir = deflectionVec.normalize();
           const defDist = Math.max(120, (deflectionVec.length() / 4300) * 1600);
+          const defEndpoint = this.rayCastEndpoint(firstRayInfo.ghostBall, defDir, defDist, cue.radius);
           pred.cueDeflectionPath.push({
             start: firstRayInfo.ghostBall.clone(),
-            end: firstRayInfo.ghostBall.add(deflectionVec.normalize().scale(defDist)),
+            end: defEndpoint?.hitPoint ?? firstRayInfo.ghostBall.add(defDir.scale(defDist)),
             type: 'cue-deflection',
             bounce: 0,
           });
         }
+      } else if (firstRayInfo.pocketHit) {
+        pred.cuePath.push({
+          start: cue.position.clone(),
+          end: firstRayInfo.pocketHit,
+          type: 'cue',
+          bounce: 0,
+        });
       } else if (firstRayInfo.cushionHit) {
         pred.cuePath.push({
           start: cue.position.clone(),
@@ -634,7 +661,8 @@ export class PhysicsEngine {
     }
 
     // ── FULL SIMULATION ROUTE TRACE ───────────────────────────────────────────
-    const sim = new PhysicsEngine();
+    const sim = new PhysicsEngine(this.table.variant);
+    sim.isGhostSimulation = true;
     sim.clothConfig = this.clothConfig;
     sim.cushionConfig = this.cushionConfig;
     sim.cueConfig = this.cueConfig;
@@ -660,6 +688,7 @@ export class PhysicsEngine {
         bounces: number;
         colorHex: string;
         moved: boolean;
+        stopRecorded: boolean;
       }
     >();
 
@@ -673,6 +702,7 @@ export class PhysicsEngine {
           bounces: 0,
           colorHex: b.colorInfo.hex,
           moved: false,
+          stopRecorded: false,
         });
       }
     }
@@ -685,6 +715,7 @@ export class PhysicsEngine {
     let firstCushionHitPos: Vector2D | null = null;
     let totalCueDist = 0;
     let prevCuePos = simCue.position.clone();
+    let cueStopRecorded = false;
 
     sim.onCollision = (ev) => {
       if (!hasHitBall && (ev.ballA.type === 'cue' || ev.ballB.type === 'cue')) {
@@ -701,9 +732,11 @@ export class PhysicsEngine {
           simCutAngleDeg = Math.acos(cos) * (180 / Math.PI);
         }
 
-        cueSamples.push({ pos: simCue.position.clone(), bounce: cueBounces, postImpact: false });
-        if (simCue.velocity.length() > 1) {
-          lastCueSampleDir = simCue.velocity.normalize();
+        if (!simCue.potted && !cueStopRecorded) {
+          cueSamples.push({ pos: simCue.position.clone(), bounce: cueBounces, postImpact: false });
+          if (simCue.velocity.length() > 1) {
+            lastCueSampleDir = simCue.velocity.normalize();
+          }
         }
       }
     };
@@ -714,35 +747,44 @@ export class PhysicsEngine {
         PhysicsEngine.FIXED_DT,
         4,
         true,
-        () => {
+        (contactPoint) => {
+          if (simCue.potted || cueStopRecorded) return;
           cueBounces++;
-          if (!firstCushionHitPos) firstCushionHitPos = simCue.position.clone();
-          cueSamples.push({ pos: simCue.position.clone(), bounce: cueBounces, postImpact: hasHitBall });
+          const pt = contactPoint ? contactPoint.clone() : simCue.position.clone();
+          if (!firstCushionHitPos) firstCushionHitPos = pt.clone();
+          cueSamples.push({ pos: pt, bounce: cueBounces, postImpact: hasHitBall });
           if (simCue.velocity.length() > 1) {
             lastCueSampleDir = simCue.velocity.normalize();
           }
         },
-        (ballId) => {
+        (ballId, contactPoint) => {
           const t = objTrackers.get(ballId);
-          if (t) {
+          if (t && !t.stopRecorded) {
             t.bounces++;
             const realB = sim.balls.find((x) => x.id === ballId);
             if (realB) {
-              t.samples.push({ pos: realB.position.clone(), bounce: t.bounces });
-              t.lastRecordedPos = realB.position.clone();
+              const pt = contactPoint ? contactPoint.clone() : realB.position.clone();
+              t.samples.push({ pos: pt, bounce: t.bounces });
+              t.lastRecordedPos = pt.clone();
               t.lastDir = realB.velocity.length() > 1 ? realB.velocity.normalize() : null;
             }
           }
         }
       );
 
-      totalCueDist += simCue.position.distanceTo(prevCuePos);
-      prevCuePos = simCue.position.clone();
+      if (!simCue.potted && !cueStopRecorded) {
+        totalCueDist += simCue.position.distanceTo(prevCuePos);
+        prevCuePos = simCue.position.clone();
+      } else if (simCue.potted && !cueStopRecorded) {
+        totalCueDist += simCue.position.distanceTo(prevCuePos);
+        prevCuePos = simCue.position.clone();
+      }
 
-      // Record cue vertex ONLY if curve/direction changed noticeably or simulation ended
-      if (!sim.isSimulating || simCue.potted) {
+      // Record cue vertex ONCE on pocket/stop, or on noticeable curve change
+      if ((!sim.isSimulating || simCue.potted) && !cueStopRecorded) {
         cueSamples.push({ pos: simCue.position.clone(), bounce: cueBounces, postImpact: hasHitBall });
-      } else if (simCue.velocity.length() > 15) {
+        cueStopRecorded = true;
+      } else if (!cueStopRecorded && simCue.velocity.length() > 15) {
         const curDir = simCue.velocity.normalize();
         const dot = curDir.dot(lastCueSampleDir);
         if (dot < 0.9996 && simCue.position.distanceTo(cueSamples[cueSamples.length - 1].pos) >= 20) {
@@ -751,7 +793,7 @@ export class PhysicsEngine {
         }
       }
 
-      // Record object ball vertices ONLY on direction changes, potting, or end of motion
+      // Record object ball vertices ONCE on potting/end, or on direction changes
       for (const b of sim.balls) {
         if (b.type === 'cue') continue;
         const t = objTrackers.get(b.id);
@@ -759,10 +801,11 @@ export class PhysicsEngine {
         if (b.position.distanceTo(t.startPos) > 1.0) {
           t.moved = true;
         }
-        if (t.moved) {
+        if (t.moved && !t.stopRecorded) {
           if (b.potted || !sim.isSimulating) {
             t.samples.push({ pos: b.position.clone(), bounce: t.bounces });
             t.lastRecordedPos = b.position.clone();
+            t.stopRecorded = true;
           } else if (b.velocity.length() > 15) {
             const curDir = b.velocity.normalize();
             if (!t.lastDir || curDir.dot(t.lastDir) < 0.9996) {
@@ -868,7 +911,8 @@ export class PhysicsEngine {
   }
 
   /**
-   * Analytical raycast for first contact point (exact 2R ghost ball position & cut angle).
+   * Analytical raycast for first contact point (exact 2R ghost ball position & cut angle,
+   * or pocket/cushion impact if aiming into open cloth or a pot).
    */
   private findFirstRayIntersection(
     cue: Ball,
@@ -878,6 +922,7 @@ export class PhysicsEngine {
     ghostBall: Vector2D | null;
     targetBall: Ball | null;
     cushionHit: Vector2D | null;
+    pocketHit: Vector2D | null;
     cutAngleDeg: number;
   } {
     const rayDir = Vector2D.fromAngle(angleRad, 1);
@@ -909,16 +954,61 @@ export class PhysicsEngine {
       const normal = hitBall.position.sub(ghostPos).normalize();
       const cutCos = Math.max(-1, Math.min(1, rayDir.dot(normal)));
       const cutAngleDeg = Math.acos(cutCos) * (180 / Math.PI);
-      return { ghostBall: ghostPos, targetBall: hitBall, cushionHit: null, cutAngleDeg };
+      return {
+        ghostBall: ghostPos,
+        targetBall: hitBall,
+        cushionHit: null,
+        pocketHit: null,
+        cutAngleDeg,
+      };
     }
 
-    const cushionHit = this.rayCastCushion(startPos, rayDir, maxDist, cue.radius);
+    const endpoint = this.rayCastEndpoint(startPos, rayDir, maxDist, cue.radius);
     return {
       ghostBall: null,
       targetBall: null,
-      cushionHit: cushionHit?.hitPoint ?? null,
+      cushionHit: endpoint?.isPocket ? null : endpoint?.hitPoint ?? null,
+      pocketHit: endpoint?.isPocket ? endpoint.hitPoint : null,
       cutAngleDeg: 0,
     };
+  }
+
+  /**
+   * Raycasts against both pocket capture discs and cushions, returning whichever is closer.
+   */
+  private rayCastEndpoint(
+    origin: Vector2D,
+    dir: Vector2D,
+    maxDist: number,
+    ballRadius: number
+  ): { hitPoint: Vector2D; dist: number; isPocket: boolean } | null {
+    let bestPocketDist = maxDist;
+    let pocketCenter: Vector2D | null = null;
+
+    for (const pocket of this.table.pockets) {
+      const d = pocket.position.sub(origin);
+      const proj = d.dot(dir);
+      if (proj <= 0) continue;
+      const perpSq = d.lengthSq() - proj * proj;
+      const captureR = pocket.radius + ballRadius * 0.35;
+      if (perpSq <= captureR * captureR) {
+        const halfChord = Math.sqrt(captureR * captureR - perpSq);
+        const hitDist = Math.max(0, proj - halfChord);
+        if (hitDist < bestPocketDist) {
+          bestPocketDist = hitDist;
+          pocketCenter = pocket.position.clone();
+        }
+      }
+    }
+
+    const cushionHit = this.rayCastCushion(origin, dir, maxDist, ballRadius);
+    if (pocketCenter && (!cushionHit || bestPocketDist <= cushionHit.dist + 8)) {
+      return { hitPoint: pocketCenter, dist: bestPocketDist, isPocket: true };
+    }
+    if (cushionHit) {
+      return { hitPoint: cushionHit.hitPoint, dist: cushionHit.dist, isPocket: false };
+    }
+    return null;
   }
 
   private rayCastCushion(
@@ -946,7 +1036,8 @@ export class PhysicsEngine {
 
       if (t1 > ballRadius && t1 < closestDist && t2 >= 0 && t2 <= 1) {
         closestDist = t1;
-        cushionHitPoint = origin.add(dir.scale(t1 - ballRadius));
+        // Project directly onto the physical cushion border so Aim-Ray touches the rail edge seamlessly
+        cushionHitPoint = origin.add(dir.scale(t1));
         cushionNormal = cushion.normal;
       }
     }
@@ -969,8 +1060,8 @@ export class PhysicsEngine {
     if (!ball) return false;
 
     const R = ball.radius;
-    const clampedX = Math.max(R + 1, Math.min(SnookerTable.LENGTH - R - 1, desiredPos.x));
-    const clampedY = Math.max(R + 1, Math.min(SnookerTable.WIDTH - R - 1, desiredPos.y));
+    const clampedX = Math.max(R + 1, Math.min(this.table.length - R - 1, desiredPos.x));
+    const clampedY = Math.max(R + 1, Math.min(this.table.width - R - 1, desiredPos.y));
     const candidate = new Vector2D(clampedX, clampedY);
 
     // Prevent overlap with other unpotted balls
@@ -992,32 +1083,144 @@ export class PhysicsEngine {
     return true;
   }
 
+  public clearObjectBalls(): void {
+    const cue = this.cueBall;
+    const R = this.table.ballRadius;
+    if (cue) {
+      cue.stop();
+      cue.potted = false;
+      cue.pottedInPocket = null;
+      cue.radius = R;
+      this.balls = [cue];
+    } else {
+      this.balls = [
+        new Ball('cue', 'cue', new Vector2D(this.table.baulkDist, this.table.width / 2), R),
+      ];
+    }
+    this.isSimulating = false;
+    this.invalidatePredictionCache();
+  }
+
+  public addBallToTable(type: BallType, poolNumber?: number): Ball | null {
+    const R = this.table.ballRadius;
+    const L = this.table.length;
+    const W = this.table.width;
+
+    if (type === 'cue') {
+      const pos = this.findOpenSpot(new Vector2D(this.table.baulkDist, W / 2), R);
+      if (!pos) return null;
+      this.placeCueBall(pos);
+      if (this.cueBall) this.cueBall.radius = R;
+      return this.cueBall ?? null;
+    }
+
+    const defaultAnchors: Partial<Record<BallType, Vector2D>> = {
+      yellow: this.table.spots.YELLOW,
+      green: this.table.spots.GREEN,
+      brown: this.table.spots.BROWN,
+      blue: this.table.spots.BLUE,
+      pink: this.table.spots.PINK,
+      black: this.table.spots.BLACK,
+      red: new Vector2D(L * 0.62, W / 2),
+      'pool-solid': new Vector2D(L * 0.68, W / 2),
+      'pool-stripe': new Vector2D(L * 0.72, W / 2),
+      'pool-8': this.table.spots.PINK,
+    };
+
+    const desired = defaultAnchors[type]?.clone() ?? new Vector2D(L * 0.6, W / 2);
+    const spot = this.findOpenSpot(desired, R);
+    if (!spot) return null;
+
+    const existingCount = this.balls.filter((b) => !b.potted).length;
+    const id = poolNumber ? `pool-${poolNumber}-${existingCount + 1}` : `${type}-${Date.now()}-${existingCount + 1}`;
+    const ball = new Ball(id, type, spot, R, poolNumber);
+    this.balls.push(ball);
+    this.invalidatePredictionCache();
+    return ball;
+  }
+
+  private findOpenSpot(desired: Vector2D, radius: number): Vector2D | null {
+    const R = radius;
+    const clampPos = (v: Vector2D) =>
+      new Vector2D(
+        Math.max(R + 40, Math.min(this.table.length - R - 40, v.x)),
+        Math.max(R + 40, Math.min(this.table.width - R - 40, v.y))
+      );
+
+    const isFree = (pos: Vector2D) => {
+      for (const b of this.balls) {
+        if (b.potted) continue;
+        if (b.position.distanceTo(pos) < b.radius + R + 6) return false;
+      }
+      return true;
+    };
+
+    const initial = clampPos(desired);
+    if (isFree(initial)) return initial;
+
+    const step = R * 2.3;
+    for (let ring = 1; ring <= 14; ring++) {
+      const dist = ring * step;
+      const samples = ring * 8;
+      for (let i = 0; i < samples; i++) {
+        const a = (i / samples) * Math.PI * 2;
+        const cand = clampPos(new Vector2D(desired.x + Math.cos(a) * dist, desired.y + Math.sin(a) * dist));
+        if (isFree(cand)) return cand;
+      }
+    }
+    return null;
+  }
+
   public setupPracticeRack(): void {
-    this.balls = [
-      new Ball('cue', 'cue', new Vector2D(737, SnookerTable.WIDTH / 2)),
-      new Ball('red-1', 'red', new Vector2D(2200, SnookerTable.WIDTH / 2)),
-      new Ball('red-2', 'red', new Vector2D(2700, SnookerTable.WIDTH / 2 + 250)),
-      new Ball('black', 'black', SnookerTable.SPOTS.BLACK.clone()),
-      new Ball('blue', 'blue', SnookerTable.SPOTS.BLUE.clone()),
-    ];
+    const R = this.table.ballRadius;
+    const W = this.table.width;
+    const L = this.table.length;
+
+    if (this.table.variant === '9ball') {
+      this.balls = [
+        new Ball('cue', 'cue', new Vector2D(this.table.baulkDist, W / 2), R),
+        new Ball('pool-1', 'pool-solid', new Vector2D(L * 0.56, W / 2), R, 1),
+        new Ball('pool-2', 'pool-solid', new Vector2D(L * 0.72, W * 0.36), R, 2),
+        new Ball('pool-9', 'pool-stripe', new Vector2D(L * 0.84, W / 2 + 90), R, 9),
+      ];
+    } else if (this.table.variant === '8ball') {
+      this.balls = [
+        new Ball('cue', 'cue', new Vector2D(this.table.baulkDist, W / 2), R),
+        new Ball('pool-3', 'pool-solid', new Vector2D(L * 0.55, W / 2 - 40), R, 3),
+        new Ball('pool-11', 'pool-stripe', new Vector2D(L * 0.70, W / 2 + 160), R, 11),
+        new Ball('pool-8', 'pool-8', new Vector2D(L * 0.84, W / 2), R, 8),
+      ];
+    } else {
+      this.balls = [
+        new Ball('cue', 'cue', new Vector2D(737, W / 2), R),
+        new Ball('red-1', 'red', new Vector2D(2200, W / 2), R),
+        new Ball('red-2', 'red', new Vector2D(2700, W / 2 + 250), R),
+        new Ball('black', 'black', this.table.spots.BLACK.clone(), R),
+        new Ball('blue', 'blue', this.table.spots.BLUE.clone(), R),
+      ];
+    }
     this.isSimulating = false;
     this.invalidatePredictionCache();
   }
 
   public setupChampionshipRack(): void {
+    this.setTableVariant('snooker');
+    const R = this.table.ballRadius;
+    const W = this.table.width;
+
     this.balls = [
-      new Ball('cue', 'cue', new Vector2D(737, SnookerTable.WIDTH / 2 - 120)),
-      new Ball('yellow', 'yellow', SnookerTable.SPOTS.YELLOW.clone()),
-      new Ball('green', 'green', SnookerTable.SPOTS.GREEN.clone()),
-      new Ball('brown', 'brown', SnookerTable.SPOTS.BROWN.clone()),
-      new Ball('blue', 'blue', SnookerTable.SPOTS.BLUE.clone()),
-      new Ball('pink', 'pink', SnookerTable.SPOTS.PINK.clone()),
-      new Ball('black', 'black', SnookerTable.SPOTS.BLACK.clone()),
+      new Ball('cue', 'cue', new Vector2D(737, W / 2 - 120), R),
+      new Ball('yellow', 'yellow', this.table.spots.YELLOW.clone(), R),
+      new Ball('green', 'green', this.table.spots.GREEN.clone(), R),
+      new Ball('brown', 'brown', this.table.spots.BROWN.clone(), R),
+      new Ball('blue', 'blue', this.table.spots.BLUE.clone(), R),
+      new Ball('pink', 'pink', this.table.spots.PINK.clone(), R),
+      new Ball('black', 'black', this.table.spots.BLACK.clone(), R),
     ];
 
-    const apexX = SnookerTable.SPOTS.PINK.x + SnookerTable.BALL_DIAMETER + 3;
-    const centerY = SnookerTable.WIDTH / 2;
-    const d = SnookerTable.BALL_DIAMETER;
+    const d = R * 2;
+    const apexX = this.table.spots.PINK.x + d + 3;
+    const centerY = W / 2;
     const dx = d * Math.cos(Math.PI / 6);
 
     let redId = 1;
@@ -1026,7 +1229,7 @@ export class PhysicsEngine {
       const startY = centerY - (row * d) / 2;
       for (let col = 0; col <= row; col++) {
         const rowY = startY + col * d;
-        this.balls.push(new Ball(`red-${redId++}`, 'red', new Vector2D(rowX, rowY)));
+        this.balls.push(new Ball(`red-${redId++}`, 'red', new Vector2D(rowX, rowY), R));
       }
     }
 
@@ -1034,13 +1237,86 @@ export class PhysicsEngine {
     this.invalidatePredictionCache();
   }
 
+  public setupNineBallRack(): void {
+    this.setTableVariant('9ball');
+    const R = this.table.ballRadius;
+    const W = this.table.width;
+    const d = R * 2 + 0.6;
+    const dx = d * Math.cos(Math.PI / 6);
+    const apexX = this.table.spots.PINK.x;
+    const centerY = W / 2;
+
+    this.balls = [
+      new Ball('cue', 'cue', new Vector2D(this.table.baulkDist, centerY + 80), R),
+    ];
+
+    // 1-2-3-2-1 Diamond rack with 1 at apex and 9 in center
+    const slots: Array<{ row: number; offsets: number[]; nums: number[] }> = [
+      { row: 0, offsets: [0], nums: [1] },
+      { row: 1, offsets: [-0.5, 0.5], nums: [3, 5] },
+      { row: 2, offsets: [-1, 0, 1], nums: [4, 9, 6] },
+      { row: 3, offsets: [-0.5, 0.5], nums: [7, 8] },
+      { row: 4, offsets: [0], nums: [2] },
+    ];
+
+    for (const s of slots) {
+      const rx = apexX + s.row * dx;
+      s.offsets.forEach((off, idx) => {
+        const num = s.nums[idx];
+        const bType: BallType = num === 9 ? 'pool-stripe' : num === 8 ? 'pool-8' : 'pool-solid';
+        this.balls.push(new Ball(`pool-${num}`, bType, new Vector2D(rx, centerY + off * d), R, num));
+      });
+    }
+
+    this.isSimulating = false;
+    this.invalidatePredictionCache();
+  }
+
+  public setupEightBallRack(): void {
+    this.setTableVariant('8ball');
+    const R = this.table.ballRadius;
+    const W = this.table.width;
+    const d = R * 2 + 0.6;
+    const dx = d * Math.cos(Math.PI / 6);
+    const apexX = this.table.spots.PINK.x - dx;
+    const centerY = W / 2;
+
+    this.balls = [
+      new Ball('cue', 'cue', new Vector2D(this.table.baulkDist, centerY - 60), R),
+    ];
+
+    // Standard 15-ball triangle: 8 in center (row 2 col 1), mixed solids & stripes on back corners
+    const rackOrder = [
+      [1],
+      [9, 2],
+      [3, 8, 10],
+      [11, 4, 12, 5],
+      [6, 13, 7, 14, 15],
+    ];
+
+    rackOrder.forEach((rowNums, row) => {
+      const rx = apexX + row * dx;
+      const startY = centerY - (row * d) / 2;
+      rowNums.forEach((num, col) => {
+        const ry = startY + col * d;
+        const bType: BallType = num === 8 ? 'pool-8' : num > 8 ? 'pool-stripe' : 'pool-solid';
+        this.balls.push(new Ball(`pool-${num}`, bType, new Vector2D(rx, ry), R, num));
+      });
+    });
+
+    this.isSimulating = false;
+    this.invalidatePredictionCache();
+  }
+
   public placeCueBall(position: Vector2D): void {
     let cue = this.cueBall;
+    const R = this.table.ballRadius;
     if (!cue) {
-      cue = new Ball('cue', 'cue', position);
+      cue = new Ball('cue', 'cue', position, R);
       this.balls.push(cue);
     } else {
       cue.position = position;
+      cue.radius = R;
       cue.stop();
       cue.potted = false;
       cue.pottedInPocket = null;

@@ -94,9 +94,9 @@ export const SpinSelector: React.FC = () => {
   const safeCirclePct = Math.round(maxOffset * 100);
 
   return (
-    <div className="flex flex-col items-center bg-surface-card border border-surface-subtle p-2 rounded-xl shadow-lg w-full max-w-[235px]">
+    <div className="flex flex-col items-center bg-arena-panel border border-arena-border p-2.5 rounded-2xl w-full max-w-[235px]">
       <div className="flex items-center justify-between w-full mb-1">
-        <span className="text-[10px] uppercase tracking-wider font-semibold text-brass-primary">
+        <span className="text-[10px] font-mono uppercase tracking-wider font-semibold text-emerald-bright">
           Spin &amp; Angle
         </span>
         <div className="flex items-center gap-1.5">

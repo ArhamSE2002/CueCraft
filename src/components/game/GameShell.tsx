@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { useGameStore, type CameraViewMode } from '../../stores/gameStore';
+import { useGameStore, type CameraViewMode, type GameVariant } from '../../stores/gameStore';
 import { PhysicsEngine } from '../../engine/physics/PhysicsEngine';
+import { POOL_BALL_SPECS, type BallType } from '../../engine/physics/Ball';
 import { CanvasTableRenderer } from '../../renderers/2d/CanvasTableRenderer';
 import type { ThreeTableRenderer } from '../../renderers/3d/ThreeTableRenderer';
 import { Vector2D } from '../../engine/math/Vector2D';
@@ -8,6 +9,7 @@ import { SpinSelector } from './SpinSelector';
 import { PowerControl } from './PowerControl';
 import { EquipmentLabPanel } from './EquipmentLabPanel';
 import { ShotLogPanel } from './ShotLogPanel';
+import { FrameCompleteModal } from './FrameCompleteModal';
 import { LoadingScreen } from '../ui/LoadingScreen';
 import { ShortcutsOverlay } from '../ui/ShortcutsOverlay';
 import {
@@ -42,6 +44,9 @@ import {
   Navigation,
   Target,
   Lightbulb,
+  PlusCircle,
+  Trash2,
+  X,
 } from 'lucide-react';
 
 export const GameShell: React.FC = () => {
@@ -56,6 +61,10 @@ export const GameShell: React.FC = () => {
     setRenderMode,
     gameMode,
     setGameMode,
+    gameVariant,
+    setGameVariant,
+    tableVariant,
+    setTableVariant,
     interactionMode,
     setInteractionMode,
     threeDragMode,
@@ -100,6 +109,7 @@ export const GameShell: React.FC = () => {
     cueId,
     tipId,
     clothId,
+    setClothId,
     cushionId,
     activeScenarioId,
     setActiveScenarioId,
@@ -115,6 +125,9 @@ export const GameShell: React.FC = () => {
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showEquipmentLab, setShowEquipmentLab] = useState(false);
   const [showShotLog, setShowShotLog] = useState(false);
+  const [showAddBalls, setShowAddBalls] = useState(false);
+  const [showFrameComplete, setShowFrameComplete] = useState(false);
+  const [shotsCount, setShotsCount] = useState(0);
   const [isPointerDown, setIsPointerDown] = useState(false);
   const [draggedBallId2D, setDraggedBallId2D] = useState<string | null>(null);
 
@@ -126,11 +139,15 @@ export const GameShell: React.FC = () => {
   const loadScenario = useCallback((scenarioId: string, applyRecommended: boolean = false) => {
     const scenario = getScenarioByIdOrSlug(scenarioId);
     if (!scenario || !engineRef.current) return;
+    engineRef.current.setTableVariant('snooker');
+    setTableVariant('snooker');
     engineRef.current.balls = buildBallsForScenario(scenario);
     engineRef.current.isSimulating = false;
     engineRef.current.invalidatePredictionCache();
     setActiveScenarioId(scenario.id);
     setGameMode('lesson');
+    setShowFrameComplete(false);
+    setShotsCount(0);
     resetScore();
     if (applyRecommended) {
       setAimAngleRad((scenario.recommendedAimDeg * Math.PI) / 180);
@@ -152,15 +169,35 @@ export const GameShell: React.FC = () => {
       if (urlCam === 'tactical' || urlCam === 'target' || urlCam === 'side' || urlCam === 'overhead' || urlCam === 'orbit') {
         setThreeCameraMode(urlCam as CameraViewMode);
       }
-      const urlRack = params.get('rack');
-      if (urlRack === 'championship' || urlRack === 'practice') setGameMode(urlRack);
+      const urlRack = params.get('game') || params.get('rack');
+      if (urlRack === 'championship' || urlRack === 'snooker') {
+        setGameVariant('snooker');
+        setGameMode('championship');
+      } else if (urlRack === '9ball') {
+        setGameVariant('9ball');
+        setTableVariant('9ball');
+      } else if (urlRack === '8ball') {
+        setGameVariant('8ball');
+        setTableVariant('8ball');
+      } else if (urlRack === 'practice') {
+        setGameVariant('practice');
+        setGameMode('practice');
+      }
       const urlScenario = params.get('scenario');
       if (urlScenario) initialScenarioId = urlScenario;
     }
 
     if (!canvasRef.current) return;
 
-    const engine = new PhysicsEngine();
+    const initialUrlRack =
+      typeof window !== 'undefined'
+        ? new URLSearchParams(window.location.search).get('game') ||
+          new URLSearchParams(window.location.search).get('rack')
+        : null;
+
+    const engine = new PhysicsEngine(
+      initialUrlRack === '9ball' ? '9ball' : initialUrlRack === '8ball' ? '8ball' : 'snooker'
+    );
     engineRef.current = engine;
 
     const renderer = new CanvasTableRenderer(canvasRef.current);
@@ -168,9 +205,8 @@ export const GameShell: React.FC = () => {
 
     engine.onBallPotted = (ball, pocket) => {
       addScore(ball.colorInfo.points);
-      setLastShotSummary(
-        `Potted ${ball.colorInfo.type.toUpperCase()} (+${ball.colorInfo.points} pts) → ${pocket.name}`
-      );
+      const ballName = ball.number ? `#${ball.number}` : ball.colorInfo.type.toUpperCase();
+      setLastShotSummary(`Potted ${ballName} (+${ball.colorInfo.points} pts) → ${pocket.name}`);
     };
 
     engine.onFoul = (foul) => {
@@ -201,14 +237,20 @@ export const GameShell: React.FC = () => {
         setCueElevationDeg(sc.recommendedElevationDeg);
         setLastShotSummary(`Lecture Challenge: ${sc.title}`);
       }
-    } else if (gameMode === 'championship') {
+    } else if (initialUrlRack === '9ball') {
+      engine.setupNineBallRack();
+      setClothId('tournament-blue');
+    } else if (initialUrlRack === '8ball') {
+      engine.setupEightBallRack();
+      setClothId('crimson-tour');
+    } else if (initialUrlRack === 'championship' || initialUrlRack === 'snooker') {
       engine.setupChampionshipRack();
     } else {
       engine.setupPracticeRack();
     }
 
     const handleResize = () => {
-      renderer.updateDpi(zoomLevel, panOffset.x, panOffset.y);
+      renderer.updateDpi(zoomLevel, panOffset.x, panOffset.y, engineRef.current?.table);
       threeRendererRef.current?.resize();
     };
     window.addEventListener('resize', handleResize);
@@ -242,11 +284,11 @@ export const GameShell: React.FC = () => {
     }
   }, [clothId, cushionId, cueId, tipId]);
 
-  // ── Sync Zoom ───────────────────────────────────────────────────────────────
+  // ── Sync Zoom & Active Table ────────────────────────────────────────────────
   useEffect(() => {
-    rendererRef.current?.updateDpi(zoomLevel, panOffset.x, panOffset.y);
+    rendererRef.current?.updateDpi(zoomLevel, panOffset.x, panOffset.y, engineRef.current?.table);
     if (threeRendererRef.current) threeRendererRef.current.zoom = zoomLevel;
-  }, [zoomLevel, panOffset]);
+  }, [zoomLevel, panOffset, tableVariant]);
 
   // ── Sync 3D Renderer Options & Lazy Load ────────────────────────────────────
   useEffect(() => {
@@ -264,7 +306,11 @@ export const GameShell: React.FC = () => {
       const cloth = CLOTH_CATALOG.find((c) => c.id === clothId) ?? CLOTH_CATALOG[1];
       const cue = CUE_CATALOG.find((c) => c.id === cueId) ?? CUE_CATALOG[0];
       const tip = TIP_CATALOG.find((t) => t.id === tipId) ?? TIP_CATALOG[1];
-      r.setClothSpec(cloth);
+      if (engineRef.current) {
+        r.setTable(engineRef.current.table, cloth);
+      } else {
+        r.setClothSpec(cloth);
+      }
       r.setCueAndTipSpec(cue, tip);
 
       r.onAimAdjust = (delta) => useGameStore.getState().adjustAimAngleRad(delta);
@@ -327,19 +373,81 @@ export const GameShell: React.FC = () => {
     tipId,
   ]);
 
-  // ── Rack change ─────────────────────────────────────────────────────────────
-  const handleRackChange = (mode: 'practice' | 'championship') => {
+  // ── Game Variant / Rack Switcher ───────────────────────────────────────────
+  const handleGameVariantChange = (variant: GameVariant) => {
     setActiveScenarioId(null);
-    setGameMode(mode);
+    setGameVariant(variant);
+    setShowAddBalls(false);
+    setShowFrameComplete(false);
+    setShotsCount(0);
     resetScore();
     if (!engineRef.current) return;
-    if (mode === 'championship') {
+
+    if (variant === '9ball') {
+      setGameMode('championship');
+      setTableVariant('9ball');
+      engineRef.current.setupNineBallRack();
+      setClothId('tournament-blue');
+      setAimAngleRad(0);
+      setLastShotSummary('9ft Pro 9-Ball Pool table & diamond rack ready.');
+    } else if (variant === '8ball') {
+      setGameMode('championship');
+      setTableVariant('8ball');
+      engineRef.current.setupEightBallRack();
+      setClothId('crimson-tour');
+      setAimAngleRad(0);
+      setLastShotSummary('8ft American 8-Ball table & 15-ball rack ready.');
+    } else if (variant === 'snooker') {
+      setGameMode('championship');
+      setTableVariant('snooker');
       engineRef.current.setupChampionshipRack();
-      setLastShotSummary('Championship 22-ball rack initialized.');
+      setClothId('club-standard');
+      setAimAngleRad(0);
+      setLastShotSummary('12ft Championship 22-ball Snooker rack ready.');
     } else {
+      setGameMode('practice');
+      setTableVariant('snooker');
+      engineRef.current.setTableVariant('snooker');
       engineRef.current.setupPracticeRack();
-      setLastShotSummary('Practice rack initialized.');
+      setClothId('club-standard');
+      setAimAngleRad(0);
+      setLastShotSummary('Practice Snooker Lab initialized.');
     }
+
+    const activeCloth =
+      CLOTH_CATALOG.find(
+        (c) =>
+          c.id ===
+          (variant === '9ball' ? 'tournament-blue' : variant === '8ball' ? 'crimson-tour' : 'club-standard')
+      ) ?? CLOTH_CATALOG[1];
+    rendererRef.current?.updateDpi(zoomLevel, panOffset.x, panOffset.y, engineRef.current.table);
+    threeRendererRef.current?.setTable(engineRef.current.table, activeCloth);
+  };
+
+  const handleResetTable = () => {
+    if (activeScenario) {
+      loadScenario(activeScenario.id, false);
+      return;
+    }
+    handleGameVariantChange(gameVariant);
+  };
+
+  const handleAddBall = (type: BallType, poolNumber?: number) => {
+    if (!engineRef.current) return;
+    const added = engineRef.current.addBallToTable(type, poolNumber);
+    if (added) {
+      setShowFrameComplete(false);
+      const label = poolNumber ? `#${poolNumber}` : type.toUpperCase();
+      setLastShotSummary(`Added ${label} ball to table. Switch to Move (M) to reposition.`);
+    } else {
+      setLastShotSummary('No open space left on table.');
+    }
+  };
+
+  const handleClearObjectBalls = () => {
+    if (!engineRef.current) return;
+    engineRef.current.clearObjectBalls();
+    setLastShotSummary('Cleared object balls — clean slate with cue ball ready.');
   };
 
   // ── Strike (always reads fresh store state so keyboard/buttons never get stale!) ──
@@ -356,6 +464,7 @@ export const GameShell: React.FC = () => {
     );
     if (struck) {
       state.setIsSimulating(true);
+      setShotsCount((c) => c + 1);
       setLastShotSummary(
         `Struck (${state.power}% power, Y=${state.spinY.toFixed(2)}, X=${state.spinX.toFixed(2)})`
       );
@@ -445,6 +554,12 @@ export const GameShell: React.FC = () => {
           engine.step(dt);
           if (!engine.isSimulating) {
             setIsSimulating(false);
+            const remainingObjectBalls = engine.balls.filter(
+              (b) => b.type !== 'cue' && !b.potted
+            );
+            if (remainingObjectBalls.length === 0) {
+              setShowFrameComplete(true);
+            }
           }
         }
 
@@ -484,7 +599,8 @@ export const GameShell: React.FC = () => {
             aimAngleRad,
             power,
             !engine.isSimulating,
-            cueElevationDeg
+            cueElevationDeg,
+            engine.table
           );
         }
       }
@@ -580,8 +696,9 @@ export const GameShell: React.FC = () => {
 
   const handleResetCueBall = () => {
     if (!engineRef.current) return;
-    engineRef.current.placeCueBall(new Vector2D(737, 889));
-    setLastShotSummary("Cue ball placed in the 'D'.");
+    const t = engineRef.current.table;
+    engineRef.current.placeCueBall(new Vector2D(t.baulkDist, t.width / 2));
+    setLastShotSummary(t.hasBaulkAndD ? "Cue ball placed in the 'D'." : 'Cue ball placed behind head string.');
   };
 
   const handleApplyRecommended = () => {
@@ -595,56 +712,56 @@ export const GameShell: React.FC = () => {
       {showShortcuts && <ShortcutsOverlay onClose={() => setShowShortcuts(false)} />}
       {showEquipmentLab && <EquipmentLabPanel onClose={() => setShowEquipmentLab(false)} />}
       {showShotLog && <ShotLogPanel onClose={() => setShowShotLog(false)} />}
+      {showFrameComplete && (
+        <FrameCompleteModal
+          score={score}
+          shotsCount={shotsCount}
+          gameVariant={gameVariant}
+          activeScenario={activeScenario}
+          onRestart={handleResetTable}
+          onSelectGame={handleGameVariantChange}
+          onSelectScenario={(id) => loadScenario(id, false)}
+          onKeepPracticing={() => setShowFrameComplete(false)}
+        />
+      )}
 
-      <div className="flex flex-col w-full h-full max-h-full overflow-hidden bg-surface-base text-ivory-text select-none">
+      <div className="flex flex-col w-full h-full max-h-full overflow-hidden bg-[#06090C] text-ivory-text select-none">
         {/* ═══════════════════════════════════════════════════════════════
-            TOP HUD BAR
+            TOP BROADCAST TELEMETRY BAR
         ═══════════════════════════════════════════════════════════════ */}
-        <header className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-surface-card border-b border-surface-subtle shrink-0">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-brass-primary animate-pulse" />
-              <h1 className="font-serif text-base font-bold tracking-wide text-ivory-text">
-                CueCraft{' '}
-                <span className="text-brass-primary font-sans text-[10px] tracking-normal uppercase px-1 py-0.5 rounded bg-brass-primary/10 border border-brass-primary/20">
-                  Lab v2.0
-                </span>
-              </h1>
+        <header className="relative z-30 flex flex-wrap items-center justify-between gap-2 px-4 py-2 bg-[#0B1014]/95 backdrop-blur-md border-b border-white/[0.08] shrink-0">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+            {/* Game Rules & Table Variant Selector */}
+            <div className="flex items-center bg-[#06090C] p-0.5 rounded-full border border-white/[0.08]">
+              {(
+                [
+                  { id: 'practice', label: 'Practice' },
+                  { id: 'snooker', label: 'Snooker' },
+                  { id: '9ball', label: '9-Ball' },
+                  { id: '8ball', label: '8-Ball' },
+                ] as const
+              ).map((g) => (
+                <button
+                  key={g.id}
+                  onClick={() => handleGameVariantChange(g.id)}
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-all ${
+                    gameVariant === g.id && !activeScenarioId
+                      ? 'bg-emerald-600/90 text-white shadow-sm'
+                      : 'text-ivory-muted hover:text-ivory-text'
+                  }`}
+                >
+                  {g.label}
+                </button>
+              ))}
             </div>
 
-            <div className="h-4 w-[1px] bg-surface-subtle hidden sm:block" />
-
-            {/* Practice / Championship / Move Balls */}
-            <div className="flex items-center bg-surface-base p-0.5 rounded-lg border border-surface-subtle text-xs">
-              <button
-                onClick={() => handleRackChange('practice')}
-                className={`px-2 py-0.5 rounded text-[11px] transition-colors font-medium ${
-                  gameMode === 'practice' && !activeScenarioId
-                    ? 'bg-felt-surface text-ivory-text shadow-sm'
-                    : 'text-ivory-muted hover:text-ivory-text'
-                }`}
-              >
-                Practice
-              </button>
-              <button
-                onClick={() => handleRackChange('championship')}
-                className={`px-2 py-0.5 rounded text-[11px] transition-colors font-medium ${
-                  gameMode === 'championship' && !activeScenarioId
-                    ? 'bg-felt-surface text-ivory-text shadow-sm'
-                    : 'text-ivory-muted hover:text-ivory-text'
-                }`}
-              >
-                Championship
-              </button>
-            </div>
-
-            {/* Aim vs Move Balls Mode Toggle */}
-            <div className="flex items-center bg-surface-base p-0.5 rounded-lg border border-surface-subtle text-xs">
+            {/* Aim vs Move Balls Toggle */}
+            <div className="flex items-center bg-[#06090C] p-0.5 rounded-full border border-white/[0.08]">
               <button
                 onClick={() => setInteractionMode('aim')}
-                className={`px-2 py-0.5 rounded text-[11px] flex items-center gap-1 transition-colors font-medium ${
+                className={`px-2.5 py-1 rounded-full text-[11px] flex items-center gap-1 transition-all font-medium ${
                   interactionMode === 'aim'
-                    ? 'bg-brass-primary text-surface-base font-bold'
+                    ? 'bg-brass-primary text-[#06090C] font-bold'
                     : 'text-ivory-muted hover:text-ivory-text'
                 }`}
                 title="Aim & Shoot Mode (M)"
@@ -653,60 +770,174 @@ export const GameShell: React.FC = () => {
               </button>
               <button
                 onClick={() => setInteractionMode('move')}
-                className={`px-2 py-0.5 rounded text-[11px] flex items-center gap-1 transition-colors font-medium ${
+                className={`px-2.5 py-1 rounded-full text-[11px] flex items-center gap-1 transition-all font-medium ${
                   interactionMode === 'move'
-                    ? 'bg-chalk-cyan text-surface-base font-bold'
+                    ? 'bg-chalk-cyan text-[#06090C] font-bold'
                     : 'text-ivory-muted hover:text-ivory-text'
                 }`}
-                title="Drag ANY ball to place freely on table (M)"
+                title="Drag ANY ball freely on table (M)"
               >
-                <Move className="w-3 h-3" /> Move Balls
+                <Move className="w-3 h-3" /> Move
               </button>
+            </div>
+
+            {/* Practice Actions: Reset Table & Add Balls */}
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={handleResetTable}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/[0.04] hover:bg-white/[0.1] border border-white/[0.09] text-ivory-text text-[11px] font-medium transition-colors"
+                title="Reset current table & balls"
+              >
+                <RotateCcw className="w-3 h-3 text-brass-primary" />
+                <span>Reset</span>
+              </button>
+
+              <div className="relative">
+                <button
+                  onClick={() => setShowAddBalls((v) => !v)}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-full border text-[11px] font-medium transition-colors ${
+                    showAddBalls
+                      ? 'bg-chalk-cyan text-[#06090C] border-chalk-cyan font-bold'
+                      : 'bg-white/[0.04] hover:bg-white/[0.1] border-white/[0.09] text-chalk-cyan'
+                  }`}
+                  title="Add balls to table or clear objects"
+                >
+                  <PlusCircle className="w-3 h-3" />
+                  <span>Add Balls</span>
+                </button>
+
+                {showAddBalls && (
+                  <div className="absolute left-0 top-full mt-2 w-72 sm:w-80 rounded-2xl bg-[#0F151B]/98 backdrop-blur-xl border border-white/15 shadow-2xl p-3.5 z-50">
+                    <div className="flex items-center justify-between mb-2.5">
+                      <span className="text-[11px] font-mono uppercase tracking-wider text-brass-primary font-bold">
+                        Ball Spawner
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={handleClearObjectBalls}
+                          className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-500/15 hover:bg-red-500/25 border border-red-400/30 text-red-300 text-[10px] font-mono"
+                        >
+                          <Trash2 className="w-2.5 h-2.5" /> Clear Table
+                        </button>
+                        <button
+                          onClick={() => setShowAddBalls(false)}
+                          className="p-0.5 rounded-full text-ivory-muted hover:text-ivory-text"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {tableVariant === 'snooker' ? (
+                      <div className="space-y-2">
+                        <p className="text-[10px] text-ivory-muted">Tap a Snooker ball to drop on an open spot:</p>
+                        <div className="grid grid-cols-4 gap-1.5">
+                          {(
+                            [
+                              { type: 'cue', label: 'Cue', hex: '#FFFFFF', textDark: true },
+                              { type: 'red', label: 'Red', hex: '#DC2626', textDark: false },
+                              { type: 'yellow', label: 'Yellow', hex: '#EAB308', textDark: true },
+                              { type: 'green', label: 'Green', hex: '#16A34A', textDark: false },
+                              { type: 'brown', label: 'Brown', hex: '#92400E', textDark: false },
+                              { type: 'blue', label: 'Blue', hex: '#2563EB', textDark: false },
+                              { type: 'pink', label: 'Pink', hex: '#EC4899', textDark: false },
+                              { type: 'black', label: 'Black', hex: '#18181B', textDark: false },
+                            ] as const
+                          ).map((b) => (
+                            <button
+                              key={b.type}
+                              onClick={() => handleAddBall(b.type)}
+                              className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.1] border border-white/10 text-[10px] font-medium transition-colors"
+                            >
+                              <span
+                                className="w-3 h-3 rounded-full border border-white/25 shrink-0"
+                                style={{ backgroundColor: b.hex }}
+                              />
+                              <span className="truncate">{b.label}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-ivory-muted">Add Cue or Object Ball (1–15):</span>
+                          <button
+                            onClick={() => handleAddBall('cue')}
+                            className="px-2 py-0.5 rounded-full bg-white text-[#06090C] text-[10px] font-bold"
+                          >
+                            + Cue
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-5 gap-1.5">
+                          {Object.values(POOL_BALL_SPECS).map((spec) => (
+                            <button
+                              key={spec.number}
+                              onClick={() =>
+                                handleAddBall(
+                                  spec.number === 8 ? 'pool-8' : spec.isStripe ? 'pool-stripe' : 'pool-solid',
+                                  spec.number
+                                )
+                              }
+                              className="flex items-center justify-center gap-1 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.12] border border-white/10 text-[10px] font-mono transition-colors"
+                            >
+                              <span
+                                className="w-3 h-3 rounded-full border border-white/30 flex items-center justify-center text-[8px] font-bold"
+                                style={{
+                                  backgroundColor: spec.isStripe ? '#F8F6F0' : spec.hex,
+                                  color: spec.isStripe ? '#0B1014' : '#FFFFFF',
+                                }}
+                              >
+                                {spec.number}
+                              </span>
+                              <span>#{spec.number}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Right HUD */}
+          {/* Right HUD Telemetry & Studio Tools */}
           <div className="flex items-center gap-1.5 sm:gap-2 text-xs font-mono">
-            {/* Score */}
-            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-surface-base border border-surface-subtle">
-              <Trophy className="w-3.5 h-3.5 text-brass-primary" />
-              <span className="font-bold text-brass-primary text-sm">{score}</span>
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#06090C] border border-white/[0.08]">
+              <Trophy className="w-3 h-3 text-brass-primary" />
+              <span className="font-bold text-brass-primary text-xs tabular-nums">{score}</span>
             </div>
 
-            {/* Cut angle */}
-            <div className="hidden md:flex items-center gap-1 px-2 py-0.5 rounded-md bg-surface-base border border-surface-subtle text-[11px]">
-              <Crosshair className="w-3 h-3 text-chalk-cyan" />
-              <span className="text-ivory-muted">Cut:</span>
-              <span className="font-bold text-ivory-text">{cutAngleDeg}°</span>
+            <div className="hidden md:flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#06090C] border border-white/[0.08] text-[11px]">
+              <span className="text-ivory-muted">Cut</span>
+              <span className="font-bold text-chalk-cyan tabular-nums">{cutAngleDeg}°</span>
             </div>
 
-            {/* Equipment & Table Physics Lab button */}
             <button
               onClick={() => setShowEquipmentLab(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface-base hover:bg-surface-elevated border border-brass-primary/40 text-brass-primary text-[11px] font-sans font-semibold transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/[0.04] hover:bg-white/[0.1] border border-brass-primary/35 text-brass-primary text-[11px] font-sans font-semibold transition-colors"
               title="Customize Cue Shaft, Tip, Cloth Speed & Cushion Borders"
             >
-              <Sliders className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Table &amp; Cue Lab</span>
+              <Sliders className="w-3 h-3" />
+              <span className="hidden sm:inline">Table &amp; Cue</span>
             </button>
 
-            {/* Prediction vs Actual Telemetry Log button */}
             <button
               onClick={() => setShowShotLog(true)}
-              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-surface-base hover:bg-surface-elevated border border-surface-subtle text-chalk-cyan text-[11px] transition-colors"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/[0.04] hover:bg-white/[0.1] border border-white/[0.09] text-chalk-cyan text-[11px] transition-colors"
               title="Inspect Pre-Strike Prediction vs Post-Strike Actual Telemetry Logs"
             >
-              <Activity className="w-3.5 h-3.5" />
+              <Activity className="w-3 h-3" />
               <span className="hidden lg:inline">Logs ({shotLogs.length})</span>
             </button>
 
-            {/* 2D / 3D Toggle */}
-            <div className="flex items-center bg-surface-base p-0.5 rounded-lg border border-surface-subtle">
+            <div className="flex items-center bg-[#06090C] p-0.5 rounded-full border border-white/[0.08]">
               <button
                 onClick={() => setRenderMode('2d')}
-                className={`px-2 py-0.5 rounded text-xs font-medium flex items-center gap-1 transition-colors ${
+                className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium flex items-center gap-1 transition-all ${
                   renderMode === '2d'
-                    ? 'bg-brass-primary text-surface-base font-semibold'
+                    ? 'bg-brass-primary text-[#06090C] font-bold'
                     : 'text-ivory-muted hover:text-ivory-text'
                 }`}
               >
@@ -714,9 +945,9 @@ export const GameShell: React.FC = () => {
               </button>
               <button
                 onClick={() => setRenderMode('3d')}
-                className={`px-2 py-0.5 rounded text-xs font-medium flex items-center gap-1 transition-colors ${
+                className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium flex items-center gap-1 transition-all ${
                   renderMode === '3d'
-                    ? 'bg-brass-primary text-surface-base font-semibold'
+                    ? 'bg-brass-primary text-[#06090C] font-bold'
                     : 'text-ivory-muted hover:text-ivory-text'
                 }`}
               >
@@ -726,7 +957,7 @@ export const GameShell: React.FC = () => {
 
             <button
               onClick={() => setShowShortcuts(true)}
-              className="p-1.5 rounded-lg text-ivory-muted hover:text-ivory-text hover:bg-surface-elevated transition-colors border border-surface-subtle"
+              className="p-1.5 rounded-full text-ivory-muted hover:text-ivory-text hover:bg-white/[0.08] transition-colors border border-white/[0.08]"
               title="Keyboard shortcuts (?)"
             >
               <Keyboard className="w-3.5 h-3.5" />
@@ -737,7 +968,7 @@ export const GameShell: React.FC = () => {
         {/* ═══════════════════════════════════════════════════════════════
             SIMULATION VIEWPORT
         ═══════════════════════════════════════════════════════════════ */}
-        <main className="relative flex-1 min-h-0 w-full bg-felt-darkest overflow-hidden flex items-center justify-center p-1 sm:p-2">
+        <main className="relative flex-1 min-h-0 w-full bg-[#040709] overflow-hidden flex items-center justify-center p-1 sm:p-2">
           {/* Active Lecture / Lesson Scenario Challenge Banner */}
           {activeScenario && (
             <div className="absolute top-3 left-3 z-20 max-w-md bg-surface-card/92 backdrop-blur border border-brass-primary/40 rounded-xl p-2.5 shadow-xl text-xs">
@@ -795,7 +1026,7 @@ export const GameShell: React.FC = () => {
           )}
 
           {/* Floating Zoom & 3D Camera Angles Toolbar */}
-          <div className="absolute top-3 right-3 z-20 flex flex-wrap items-center justify-end gap-1 bg-surface-card/90 backdrop-blur border border-surface-subtle p-1 rounded-lg text-xs shadow-lg max-w-[95vw]">
+          <div className="absolute top-3 right-3 z-20 flex flex-wrap items-center justify-end gap-1 bg-[#0B1014]/85 backdrop-blur-md border border-white/10 px-2 py-1 rounded-full text-xs shadow-xl max-w-[95vw]">
             <button onClick={zoomIn} className="p-1 rounded hover:bg-surface-elevated text-ivory-muted hover:text-ivory-text" title="Zoom In">
               <ZoomIn className="w-3.5 h-3.5" />
             </button>
@@ -943,8 +1174,8 @@ export const GameShell: React.FC = () => {
         {/* ═══════════════════════════════════════════════════════════════
             BOTTOM CONTROL DOCK
         ═══════════════════════════════════════════════════════════════ */}
-        <footer className="w-full bg-surface-card border-t border-surface-subtle px-3 py-2 shrink-0">
-          <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <footer className="w-full bg-[#0B1014]/95 backdrop-blur-md border-t border-white/[0.08] px-4 py-2 shrink-0">
+          <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-x-5 gap-y-2">
             {/* Aim Dial */}
             <div className="flex flex-col gap-1">
               <div className="flex items-center justify-between gap-2">
@@ -1016,10 +1247,10 @@ export const GameShell: React.FC = () => {
               <button
                 onClick={handleStrike}
                 disabled={isSimulating}
-                className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs tracking-wider uppercase transition-all shadow-lg ${
+                className={`flex items-center justify-center gap-2 px-6 py-2.5 rounded-full font-bold text-xs tracking-wider uppercase transition-all shadow-lg ${
                   isSimulating
                     ? 'bg-surface-subtle text-ivory-faint cursor-not-allowed'
-                    : 'bg-brass-primary hover:bg-brass-hover text-surface-base shadow-brass-glow active:scale-95'
+                    : 'bg-brass-primary hover:bg-brass-hover text-[#06090C] shadow-brass-glow active:scale-95'
                 }`}
               >
                 <Play className="w-3.5 h-3.5 fill-current" />
@@ -1028,10 +1259,10 @@ export const GameShell: React.FC = () => {
 
               <button
                 onClick={toggleFullRoute}
-                className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl border text-xs font-mono transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-full border text-xs font-mono transition-all ${
                   showFullRoute
-                    ? 'bg-felt-surface border-felt-accent text-chalk-cyan font-bold shadow-sm'
-                    : 'bg-surface-base border-surface-subtle text-ivory-faint hover:text-ivory-text'
+                    ? 'bg-emerald-500/15 border-emerald-400/50 text-chalk-cyan font-bold shadow-sm'
+                    : 'bg-[#06090C] border-white/10 text-ivory-faint hover:text-ivory-text'
                 }`}
                 title="Full Multi-Ball & Multi-Cushion Simulation Trace vs Direct Ray (R)"
               >
@@ -1041,13 +1272,13 @@ export const GameShell: React.FC = () => {
                 </span>
               </button>
 
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 bg-[#06090C] p-0.5 rounded-full border border-white/[0.08]">
                 <button
                   onClick={toggleTrajectories}
-                  className={`p-2 rounded-lg border transition-colors ${
+                  className={`p-1.5 rounded-full transition-colors ${
                     showTrajectories
-                      ? 'bg-felt-surface border-felt-accent text-chalk-cyan'
-                      : 'bg-surface-base border-surface-subtle text-ivory-faint'
+                      ? 'bg-emerald-500/20 text-chalk-cyan'
+                      : 'text-ivory-faint hover:text-ivory-text'
                   }`}
                   title="Toggle trajectory lines (T)"
                 >
@@ -1055,10 +1286,10 @@ export const GameShell: React.FC = () => {
                 </button>
                 <button
                   onClick={toggleGhostBall}
-                  className={`p-2 rounded-lg border transition-colors ${
+                  className={`p-1.5 rounded-full transition-colors ${
                     showGhostBall
-                      ? 'bg-felt-surface border-felt-accent text-chalk-cyan'
-                      : 'bg-surface-base border-surface-subtle text-ivory-faint'
+                      ? 'bg-emerald-500/20 text-chalk-cyan'
+                      : 'text-ivory-faint hover:text-ivory-text'
                   }`}
                   title="Toggle ghost ball (G)"
                 >
@@ -1066,8 +1297,8 @@ export const GameShell: React.FC = () => {
                 </button>
                 <button
                   onClick={handleResetCueBall}
-                  className="p-2 rounded-lg bg-surface-base hover:bg-surface-elevated border border-surface-subtle text-ivory-muted hover:text-ivory-text transition-colors"
-                  title="Reset cue ball to D (C)"
+                  className="p-1.5 rounded-full text-ivory-muted hover:text-ivory-text transition-colors"
+                  title="Reset cue ball position (C)"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                 </button>

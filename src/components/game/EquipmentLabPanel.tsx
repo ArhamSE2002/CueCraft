@@ -35,14 +35,14 @@ export const EquipmentLabPanel: React.FC<EquipmentLabPanelProps> = ({ onClose })
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md h-full bg-surface-card border-l border-surface-subtle shadow-2xl flex flex-col overflow-hidden"
+        className="w-full max-w-md h-full bg-arena-panel border-l border-arena-border shadow-2xl flex flex-col overflow-hidden text-arena-text"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-surface-subtle bg-surface-base">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-arena-border bg-arena-bg">
           <div className="flex items-center gap-2">
-            <Sliders className="w-4 h-4 text-brass-primary" />
-            <h2 className="font-serif text-base font-bold text-ivory-text tracking-wide">
+            <Sliders className="w-4 h-4 text-emerald-bright" />
+            <h2 className="font-display text-base font-bold text-white tracking-tight">
               Equipment &amp; Table Physics Lab
             </h2>
           </div>

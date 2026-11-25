@@ -161,6 +161,28 @@ export const CLOTH_CATALOG: ClothSpec[] = [
     description: 'Thick woolen pub/club cloth with strong directional resistance.',
     physicsEffect: 'High friction (μr=0.056, μs=0.28): balls pull up quickly and high-angle swerve curves earlier.',
   },
+  {
+    id: 'tournament-blue',
+    name: 'Simonis 860 Tour Blue',
+    slidingFriction: 0.16,
+    rollingFriction: 0.019,
+    spinDecay: 0.991,
+    feltHex2D: '#10497A',
+    feltHex3D: 0x135995,
+    description: 'Official 9-Ball championship worsted blue cloth calibrated for crisp break spreads.',
+    physicsEffect: 'Ultra-fast worsted pool weave (μr=0.019): long rails and multi-cushion shapes glide smoothly.',
+  },
+  {
+    id: 'crimson-tour',
+    name: 'Burgundy Championship Cloth',
+    slidingFriction: 0.19,
+    rollingFriction: 0.025,
+    spinDecay: 0.988,
+    feltHex2D: '#591625',
+    feltHex3D: 0x6b1b2d,
+    description: 'High-contrast burgundy pool baize with brisk speed and predictable check-side bite.',
+    physicsEffect: 'Brisk American pool speed (μr=0.025) tailored for tight 8-Ball clusters and bank shots.',
+  },
 ];
 
 export const CUSHION_CATALOG: CushionSpec[] = [

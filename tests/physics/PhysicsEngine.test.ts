@@ -252,4 +252,68 @@ describe('CueCraft Deterministic Physics Engine', () => {
     const overlappingMove = engine.moveBall('red-1', cue.position.clone());
     expect(overlappingMove).toBe(false);
   });
+
+  it('produces clean pocket-aimed cue trajectory without erratic bounce or duplicate tail samples', () => {
+    // Cue ball aiming straight at top-right corner pocket (3569, 1778)
+    const cue = new Ball('cue', 'cue', new Vector2D(3000, 1209));
+    engine.balls = [cue];
+
+    const pocketPos = new Vector2D(3569, 1778);
+    const angleRad = pocketPos.sub(cue.position).angle();
+
+    // Aim-Ray should terminate cleanly at the pocket center
+    const aimRay = engine.calculateTrajectory(angleRad, 65, 0, 0, 0, false);
+    expect(aimRay.cuePath.length).toBe(1);
+    expect(aimRay.cuePath[0].end.distanceTo(pocketPos)).toBeLessThan(1.0);
+
+    // Full-Route should stop cleanly inside the corner pocket without bouncing sideways off cushions
+    const full = engine.calculateTrajectory(angleRad, 65, 0, 0, 0, true);
+    expect(full.cueFinalPos).not.toBeNull();
+    expect(full.cueFinalPos!.distanceTo(pocketPos)).toBeLessThan(1.0);
+    expect(full.cueCushionBounces).toBe(0);
+    expect(full.cuePath.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('switches table geometry and racks cleanly for 9-Ball and 8-Ball', () => {
+    engine.setupNineBallRack();
+    expect(engine.table.variant).toBe('9ball');
+    expect(engine.table.length).toBe(2540);
+    expect(engine.table.width).toBe(1270);
+    expect(engine.table.hasDiamonds).toBe(true);
+    expect(engine.balls.length).toBe(10); // cue + 9 object balls
+    expect(engine.balls.some((b) => b.number === 9 && b.isStripe)).toBe(true);
+
+    engine.setupEightBallRack();
+    expect(engine.table.variant).toBe('8ball');
+    expect(engine.table.length).toBe(2240);
+    expect(engine.table.width).toBe(1120);
+    expect(engine.balls.length).toBe(16); // cue + 15 object balls
+    expect(engine.balls.some((b) => b.number === 8)).toBe(true);
+  });
+
+  it('adds non-overlapping balls and clears object balls in practice mode', () => {
+    engine.setupPracticeRack();
+    const initialCount = engine.balls.length;
+    const added = engine.addBallToTable('pink');
+    expect(added).not.toBeNull();
+    expect(engine.balls.length).toBe(initialCount + 1);
+
+    // Clear removes all object balls and keeps only cue ball
+    engine.clearObjectBalls();
+    expect(engine.balls.length).toBe(1);
+    expect(engine.balls[0].type).toBe('cue');
+  });
+
+  it('places cushion contact point strictly on the border edge in both Aim-Ray and Full-Route', () => {
+    const cue = new Ball('cue', 'cue', new Vector2D(2000, 889));
+    engine.balls = [cue];
+
+    // Aim straight right toward Top Cushion at X = 3569
+    const aimRay = engine.calculateTrajectory(0, 70, 0, 0, 0, false);
+    expect(aimRay.cuePath[0].end.x).toBeCloseTo(SnookerTable.LENGTH, 1);
+
+    const full = engine.calculateTrajectory(0, 70, 0, 0, 0, true);
+    expect(full.cueCushionBounces).toBeGreaterThanOrEqual(1);
+    expect(full.cuePath[0].end.x).toBeCloseTo(SnookerTable.LENGTH, 1);
+  });
 });

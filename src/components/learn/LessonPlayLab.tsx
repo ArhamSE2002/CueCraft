@@ -126,26 +126,26 @@ export const LessonPlayLab: React.FC<LessonPlayLabProps> = ({ scenarioSlug }) =>
   };
 
   return (
-    <div className="mt-12 rounded-2xl bg-surface-card border border-brass-primary/35 p-5 sm:p-6 shadow-2xl">
+    <div className="mt-12 rounded-3xl bg-[#080C12]/80 backdrop-blur-xl border border-white/[0.10] p-5 sm:p-6 shadow-2xl text-white">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div>
-          <span className="text-[11px] font-mono uppercase tracking-wider text-brass-primary flex items-center gap-1.5">
+          <span className="text-[11px] font-mono uppercase tracking-wider text-emerald-bright flex items-center gap-1.5 font-bold">
             <Lightbulb className="w-3.5 h-3.5" /> Interactive Lecture Simulation · {scenario.level}
           </span>
-          <h3 className="font-serif text-xl font-bold text-ivory-text mt-1">
+          <h3 className="font-display text-xl font-bold text-white mt-1">
             Practice Drill: {scenario.title}
           </h3>
         </div>
         <a
           href={`/play?scenario=${scenario.id}`}
-          className="px-4 py-2 rounded-xl bg-brass-primary text-surface-base font-bold text-xs uppercase tracking-wider hover:bg-brass-hover transition-colors flex items-center gap-1.5"
+          className="px-4 py-2 rounded-full bg-emerald-bright text-arena-bg font-bold text-xs uppercase tracking-wider hover:bg-emerald hover:text-white transition-colors flex items-center gap-1.5"
         >
           <span>Open in Full 2D/3D Lab</span>
           <ArrowRight className="w-3.5 h-3.5" />
         </a>
       </div>
 
-      <div className="relative w-full aspect-[2/1] rounded-xl overflow-hidden border border-surface-subtle bg-felt-darkest">
+      <div className="relative w-full aspect-[2/1] rounded-xl overflow-hidden border border-arena-border bg-[#060B09]">
         <canvas
           ref={canvasRef}
           onMouseDown={(e) => { setIsDragging(true); handlePointer(e.clientX, e.clientY); }}

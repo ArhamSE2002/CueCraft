@@ -9,7 +9,10 @@ export type BallType =
   | 'brown'
   | 'blue'
   | 'pink'
-  | 'black';
+  | 'black'
+  | 'pool-solid'
+  | 'pool-stripe'
+  | 'pool-8';
 
 export interface BallColorInfo {
   type: BallType;
@@ -17,6 +20,32 @@ export interface BallColorInfo {
   hex: string;
   specularHex: string;
 }
+
+export interface PoolBallSpec {
+  number: number;
+  hex: string;
+  specularHex: string;
+  isStripe: boolean;
+  label: string;
+}
+
+export const POOL_BALL_SPECS: Record<number, PoolBallSpec> = {
+  1: { number: 1, hex: '#EAB308', specularHex: '#FDE047', isStripe: false, label: 'Yellow Solid' },
+  2: { number: 2, hex: '#2563EB', specularHex: '#60A5FA', isStripe: false, label: 'Blue Solid' },
+  3: { number: 3, hex: '#DC2626', specularHex: '#F87171', isStripe: false, label: 'Red Solid' },
+  4: { number: 4, hex: '#7C3AED', specularHex: '#A78BFA', isStripe: false, label: 'Purple Solid' },
+  5: { number: 5, hex: '#EA580C', specularHex: '#FB923C', isStripe: false, label: 'Orange Solid' },
+  6: { number: 6, hex: '#16A34A', specularHex: '#4ADE80', isStripe: false, label: 'Green Solid' },
+  7: { number: 7, hex: '#881337', specularHex: '#FB7185', isStripe: false, label: 'Maroon Solid' },
+  8: { number: 8, hex: '#18181B', specularHex: '#52525B', isStripe: false, label: '8-Ball Black' },
+  9: { number: 9, hex: '#EAB308', specularHex: '#FDE047', isStripe: true, label: 'Yellow Stripe' },
+  10: { number: 10, hex: '#2563EB', specularHex: '#60A5FA', isStripe: true, label: 'Blue Stripe' },
+  11: { number: 11, hex: '#DC2626', specularHex: '#F87171', isStripe: true, label: 'Red Stripe' },
+  12: { number: 12, hex: '#7C3AED', specularHex: '#A78BFA', isStripe: true, label: 'Purple Stripe' },
+  13: { number: 13, hex: '#EA580C', specularHex: '#FB923C', isStripe: true, label: 'Orange Stripe' },
+  14: { number: 14, hex: '#16A34A', specularHex: '#4ADE80', isStripe: true, label: 'Green Stripe' },
+  15: { number: 15, hex: '#881337', specularHex: '#FB7185', isStripe: true, label: 'Maroon Stripe' },
+};
 
 export const BALL_COLORS: Record<BallType, BallColorInfo> = {
   cue: { type: 'cue', points: 0, hex: '#FFFFFF', specularHex: '#EAEAEA' },
@@ -27,6 +56,9 @@ export const BALL_COLORS: Record<BallType, BallColorInfo> = {
   blue: { type: 'blue', points: 5, hex: '#2563EB', specularHex: '#60A5FA' },
   pink: { type: 'pink', points: 6, hex: '#EC4899', specularHex: '#F472B6' },
   black: { type: 'black', points: 7, hex: '#18181B', specularHex: '#3F3F46' },
+  'pool-solid': { type: 'pool-solid', points: 1, hex: '#EAB308', specularHex: '#FDE047' },
+  'pool-stripe': { type: 'pool-stripe', points: 1, hex: '#2563EB', specularHex: '#60A5FA' },
+  'pool-8': { type: 'pool-8', points: 8, hex: '#18181B', specularHex: '#3F3F46' },
 };
 
 export class Ball {
@@ -58,8 +90,18 @@ export class Ball {
   public mass: number; // in kg (0.142 kg regulation)
   public potted: boolean;
   public pottedInPocket: string | null = null;
+  public number?: number;
+  public isStripe: boolean = false;
+  public customHex?: string;
+  public customSpecularHex?: string;
 
-  constructor(id: string, type: BallType, position: Vector2D) {
+  constructor(
+    id: string,
+    type: BallType,
+    position: Vector2D,
+    radius: number = SnookerTable.BALL_RADIUS,
+    poolNumber?: number
+  ) {
     this.id = id;
     this.type = type;
     this.position = position;
@@ -67,13 +109,30 @@ export class Ball {
     this.rollVel = Vector2D.zero();
     this.spin = { pitch: 0, yaw: 0 };
     this.rotation = { x: 0, y: 0, z: 0 };
-    this.radius = SnookerTable.BALL_RADIUS;
+    this.radius = radius;
     this.mass = 0.142;
     this.potted = false;
+
+    if (poolNumber !== undefined && POOL_BALL_SPECS[poolNumber]) {
+      const spec = POOL_BALL_SPECS[poolNumber];
+      this.number = poolNumber;
+      this.isStripe = spec.isStripe;
+      this.customHex = spec.hex;
+      this.customSpecularHex = spec.specularHex;
+    }
   }
 
   get colorInfo(): BallColorInfo {
-    return BALL_COLORS[this.type];
+    const base = BALL_COLORS[this.type];
+    if (this.customHex) {
+      return {
+        type: this.type,
+        points: this.number ?? base.points,
+        hex: this.customHex,
+        specularHex: this.customSpecularHex ?? base.specularHex,
+      };
+    }
+    return base;
   }
 
   isStationary(epsilon: number = 0.5): boolean {
@@ -105,16 +164,18 @@ export class Ball {
   }
 
   clone(): Ball {
-    const copy = new Ball(this.id, this.type, this.position.clone());
+    const copy = new Ball(this.id, this.type, this.position.clone(), this.radius, this.number);
     copy.velocity = this.velocity.clone();
     copy.rollVel = this.rollVel.clone();
     copy.spin = { ...this.spin };
     copy.rotation = { ...this.rotation };
     copy.swerveForce = this.swerveForce;
-    copy.radius = this.radius;
     copy.mass = this.mass;
     copy.potted = this.potted;
     copy.pottedInPocket = this.pottedInPocket;
+    copy.isStripe = this.isStripe;
+    copy.customHex = this.customHex;
+    copy.customSpecularHex = this.customSpecularHex;
     return copy;
   }
 }

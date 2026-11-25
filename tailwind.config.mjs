@@ -1,49 +1,80 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./src/**/*.{astro,html,js,jsx,md,mdx,svelte,ts,tsx,vue}'],
-  darkMode: 'class',
   theme: {
     extend: {
       colors: {
+        // Architectural Daylight Paper & Ink (Public Web Pages)
+        studio: {
+          bg: '#F6F5F0',
+          paper: '#FFFFFF',
+          muted: '#ECEAE3',
+          border: '#E2DFD5',
+          ink: '#0F1419',
+          sub: '#475569',
+          faint: '#64748B',
+        },
+        // Matte Obsidian Telemetry Tokens (Simulator /play)
+        arena: {
+          bg: '#0C0F13',
+          panel: '#141920',
+          elevated: '#1D242E',
+          border: '#28313E',
+          text: '#F8FAFC',
+          muted: '#94A3B8',
+          faint: '#64748B',
+        },
+        // High-Contrast Sport Accents
+        emerald: {
+          DEFAULT: '#059669',
+          bright: '#10B981',
+          dark: '#047857',
+        },
+        cobalt: {
+          DEFAULT: '#0284C7',
+          bright: '#38BDF8',
+        },
+        // Preserve legacy token aliases mapped cleanly to new design palette
         felt: {
-          darkest: '#041B11',
-          surface: '#0B3B26',
-          light: '#115739',
-          accent: '#197A50',
-          border: '#1C4D36',
+          darkest: '#0B1310',
+          surface: '#059669',
+          light: '#10B981',
+          accent: '#34D399',
+          border: '#1F3A2F',
         },
         surface: {
-          base: '#070A0F',
-          card: '#0E141D',
-          elevated: '#161F2D',
-          subtle: '#233044',
+          base: '#0C0F13',
+          card: '#141920',
+          elevated: '#1D242E',
+          subtle: '#28313E',
         },
         brass: {
-          primary: '#E2B857',
-          hover: '#F2CE74',
-          muted: '#8E7232',
-          dark: '#4F3F1A',
+          primary: '#10B981',
+          hover: '#34D399',
+          muted: '#059669',
+          dark: '#064E3B',
         },
         chalk: {
-          cyan: '#2DD4BF',
+          cyan: '#38BDF8',
         },
         ivory: {
           pure: '#FFFFFF',
-          text: '#FAF7F0',
-          muted: '#CBD5E1',
-          faint: '#7E8CA0',
+          text: '#F8FAFC',
+          muted: '#94A3B8',
+          faint: '#64748B',
         },
       },
       fontFamily: {
-        serif: ['Cinzel', 'Playfair Display', 'Georgia', 'serif'],
-        sans: ['Plus Jakarta Sans', 'Inter', 'system-ui', 'sans-serif'],
-        mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+        display: ['"Space Grotesk"', '"DM Sans"', 'system-ui', 'sans-serif'],
+        serif: ['"Space Grotesk"', '"DM Sans"', 'system-ui', 'sans-serif'],
+        sans: ['"DM Sans"', 'system-ui', '-apple-system', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
       },
       boxShadow: {
-        'felt-inset': 'inset 0 4px 24px rgba(0, 0, 0, 0.8), inset 0 0 12px rgba(0, 0, 0, 0.55)',
-        'brass-glow': '0 0 22px rgba(226, 184, 87, 0.3)',
-        'cushion': '0 14px 36px rgba(0, 0, 0, 0.72)',
-        'pocket': 'inset 0 0 12px rgba(0, 0, 0, 0.95)',
+        'felt-inset': 'inset 0 2px 16px rgba(0, 0, 0, 0.45)',
+        'brass-glow': '0 6px 24px rgba(16, 185, 129, 0.25)',
+        'paper': '0 1px 2px rgba(15, 20, 25, 0.04), 0 12px 32px rgba(15, 20, 25, 0.06)',
+        'stage': '0 24px 64px -16px rgba(15, 20, 25, 0.22)',
       },
     },
   },

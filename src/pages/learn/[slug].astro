@@ -169,6 +169,7 @@ const { article } = Astro.props;
 <BaseLayout
   title={`${article.title} — CueCraft Physics`}
   description={article.summary}
+  darkScene={true}
 >
   {/* JSON-LD Schema for SEO */}
   <script type="application/ld+json" set:html={JSON.stringify({
@@ -184,28 +185,45 @@ const { article } = Astro.props;
     "inLanguage": "en"
   })} />
 
-  <article class="max-w-4xl mx-auto px-4 sm:px-6 py-16">
-    {/* Navigation Breadcrumb */}
-    <div class="flex items-center gap-2 text-xs font-mono text-ivory-muted mb-8">
-      <a href="/learn" class="hover:text-brass-primary transition-colors">Learning Center</a>
-      <span>/</span>
-      <span class="text-brass-primary">{article.category}</span>
-    </div>
+  <div class="relative overflow-hidden">
+    <div
+      class="absolute -top-32 left-1/2 -translate-x-1/2 w-[900px] h-[380px] rounded-full pointer-events-none opacity-60"
+      style="background: radial-gradient(ellipse at center, rgba(16, 185, 129, 0.14) 0%, rgba(56, 189, 248, 0.05) 45%, transparent 72%);"
+      aria-hidden="true"
+    />
 
-    {/* Header */}
-    <header class="mb-10 pb-8 border-b border-surface-subtle">
-      <h1 class="font-serif text-3xl sm:text-5xl font-bold text-ivory-text leading-tight mb-4">
-        {article.title}
-      </h1>
-      <p class="text-sm sm:text-base text-ivory-muted leading-relaxed">
-        {article.summary}
-      </p>
-    </header>
+    <article class="max-w-4xl mx-auto px-4 sm:px-6 py-16 relative z-10">
+      {/* Navigation Breadcrumb */}
+      <div class="flex items-center gap-2 text-xs font-mono text-slate-400 mb-8">
+        <a href="/learn" class="hover:text-emerald-bright transition-colors">Learning Center</a>
+        <span>/</span>
+        <span class="text-emerald-bright font-bold">{article.category}</span>
+      </div>
 
-    {/* Content Body */}
-    <div class="prose prose-invert max-w-none text-ivory-text leading-relaxed" set:html={article.content} />
+      {/* Header */}
+      <header class="mb-10 pb-8 border-b border-white/[0.1]">
+        <h1 class="font-display text-3xl sm:text-5xl font-bold text-white leading-tight mb-4">
+          {article.title}
+        </h1>
+        <p class="text-sm sm:text-base text-slate-300 leading-relaxed">
+          {article.summary}
+        </p>
+      </header>
 
-    {/* Interactive Lecture Playable Simulator matching this article */}
-    <LessonPlayLab client:visible scenarioSlug={article.slug} />
-  </article>
+      {/* Content Body rendered cleanly on Obsidian Glass surface */}
+      <div
+        class="article-body space-y-4 text-slate-300 leading-relaxed bg-[#080C12]/75 backdrop-blur-xl border border-white/[0.1] rounded-3xl p-6 sm:p-8 shadow-xl"
+        set:html={article.content
+          .replaceAll('text-ivory-text', 'text-white')
+          .replaceAll('text-ivory-muted', 'text-slate-300')
+          .replaceAll('bg-surface-card', 'bg-white/[0.04]')
+          .replaceAll('border-surface-subtle', 'border-emerald-bright/25')
+          .replaceAll('text-brass-primary', 'text-emerald-bright font-bold')
+          .replaceAll('font-serif', 'font-display')}
+      />
+
+      {/* Interactive Lecture Playable Simulator matching this article */}
+      <LessonPlayLab client:visible scenarioSlug={article.slug} />
+    </article>
+  </div>
 </BaseLayout>

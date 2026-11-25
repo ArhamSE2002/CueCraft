@@ -15,7 +15,11 @@ export class ThreeTableRenderer {
 
   // Meshes & dynamic materials
   private ballMeshes: Map<string, THREE.Mesh> = new Map();
+  private poolTextureCache: Map<string, THREE.CanvasTexture> = new Map();
+  private activeTable: SnookerTable = new SnookerTable('snooker');
+  private tableGroup: THREE.Group = new THREE.Group();
   private bedMaterial!: THREE.MeshStandardMaterial;
+  private cushionMaterial!: THREE.MeshStandardMaterial;
   private cueShaftMaterial!: THREE.MeshStandardMaterial;
   private cueButtMaterial!: THREE.MeshStandardMaterial;
   private cueTipMaterial!: THREE.MeshBasicMaterial;
@@ -101,8 +105,10 @@ export class ThreeTableRenderer {
     this.lampsGroup = this.createOverheadLamps();
     this.scene.add(this.lampsGroup);
 
-    // 6. Table Geometry & Materials
-    this.setupTableMesh();
+    // 6. Room & Table Geometry & Materials
+    this.setupRoomEnvironment();
+    this.scene.add(this.tableGroup);
+    this.rebuildTableMesh(this.activeTable);
 
     // 7. Trajectories & Ghost Ball & Move Selection Ring
     this.trajectoryGroup = new THREE.Group();
@@ -142,15 +148,44 @@ export class ThreeTableRenderer {
     this.bindEvents();
   }
 
+  public setTable(table: SnookerTable, cloth?: ClothSpec): void {
+    const variantChanged = table.variant !== this.activeTable.variant;
+    this.activeTable = table;
+    if (variantChanged || this.tableGroup.children.length === 0) {
+      this.tablePlane = new THREE.Plane(
+        new THREE.Vector3(0, 1, 0),
+        -table.ballRadius * 0.001
+      );
+      this.rebuildTableMesh(table);
+      // Clear ball meshes so radii/numbers rebuild accurately for the new game table
+      for (const mesh of this.ballMeshes.values()) {
+        this.scene.remove(mesh);
+        mesh.geometry.dispose();
+      }
+      this.ballMeshes.clear();
+    }
+    if (cloth && this.bedMaterial) {
+      this.bedMaterial.color.setHex(cloth.feltHex3D);
+    }
+    if (cloth && this.cushionMaterial) {
+      this.cushionMaterial.color.setHex(cloth.feltHex3D).multiplyScalar(1.22);
+    }
+  }
+
   public setClothSpec(cloth: ClothSpec): void {
     if (this.bedMaterial) {
       this.bedMaterial.color.setHex(cloth.feltHex3D);
+    }
+    if (this.cushionMaterial) {
+      this.cushionMaterial.color.setHex(cloth.feltHex3D).multiplyScalar(1.22);
     }
   }
 
   public setCueAndTipSpec(cue: CueSpec, tip: CueTipSpec): void {
     if (this.cueShaftMaterial) this.cueShaftMaterial.color.set(cue.shaftColor);
-    if (this.cueButtMaterial) this.cueButtMaterial.color.set(cue.buttColor);
+    if (this.cueButtMaterial) {
+      this.cueButtMaterial.color.copy(new THREE.Color(cue.buttColor).lerp(new THREE.Color(0xffffff), 0.52));
+    }
     if (this.cueTipMaterial) this.cueTipMaterial.color.set(tip.colorHex);
   }
 
@@ -234,12 +269,156 @@ export class ThreeTableRenderer {
     return group;
   }
 
-  private setupTableMesh(): void {
-    const L = SnookerTable.LENGTH * 0.001;
-    const W = SnookerTable.WIDTH * 0.001;
-    const railThick = 0.08;
-    const railHeight = 0.042;
+  private rebuildTableMesh(table: SnookerTable): void {
+    while (this.tableGroup.children.length > 0) {
+      const obj = this.tableGroup.children[0];
+      this.tableGroup.remove(obj);
+      if (obj instanceof THREE.Mesh || obj instanceof THREE.Line) {
+        obj.geometry.dispose();
+      }
+    }
 
+    const L = table.length * 0.001;
+    const W = table.width * 0.001;
+    const cushionDepth = 0.042;
+    const railThick = 0.082;
+    const railHeight = 0.046;
+
+    const currentColor = this.bedMaterial?.color?.getHex() ?? 0x0e5d36;
+    const bedGeo = new THREE.BoxGeometry(L + cushionDepth * 2, 0.05, W + cushionDepth * 2);
+    this.bedMaterial = new THREE.MeshStandardMaterial({
+      color: currentColor,
+      roughness: 0.84,
+      metalness: 0.02,
+    });
+    const bed = new THREE.Mesh(bedGeo, this.bedMaterial);
+    bed.position.y = -0.025;
+    bed.receiveShadow = true;
+    this.tableGroup.add(bed);
+
+    this.setupClothMarkings(table, L, W);
+
+    const woodMat = new THREE.MeshStandardMaterial({
+      color: table.railColor3D,
+      roughness: 0.28,
+      metalness: 0.14,
+    });
+
+    const outerOffset = cushionDepth;
+    const endRailGeo = new THREE.BoxGeometry(railThick, railHeight, W + outerOffset * 2 + railThick * 2);
+    const baulkRail = new THREE.Mesh(endRailGeo, woodMat);
+    baulkRail.position.set(-L / 2 - outerOffset - railThick / 2, railHeight / 2 - 0.004, 0);
+    baulkRail.castShadow = true;
+    baulkRail.receiveShadow = true;
+    this.tableGroup.add(baulkRail);
+
+    const topRail = new THREE.Mesh(endRailGeo, woodMat);
+    topRail.position.set(L / 2 + outerOffset + railThick / 2, railHeight / 2 - 0.004, 0);
+    topRail.castShadow = true;
+    topRail.receiveShadow = true;
+    this.tableGroup.add(topRail);
+
+    const sideRailGeo = new THREE.BoxGeometry(L + outerOffset * 2, railHeight, railThick);
+    const leftRail = new THREE.Mesh(sideRailGeo, woodMat);
+    leftRail.position.set(0, railHeight / 2 - 0.004, -W / 2 - outerOffset - railThick / 2);
+    leftRail.castShadow = true;
+    leftRail.receiveShadow = true;
+    this.tableGroup.add(leftRail);
+
+    const rightRail = new THREE.Mesh(sideRailGeo, woodMat);
+    rightRail.position.set(0, railHeight / 2 - 0.004, W / 2 + outerOffset + railThick / 2);
+    rightRail.castShadow = true;
+    rightRail.receiveShadow = true;
+    this.tableGroup.add(rightRail);
+
+    // Rail Diamond Sights for Pool variants
+    if (table.hasDiamonds) {
+      const diamondMat = new THREE.MeshStandardMaterial({
+        color: 0xe6d6ad,
+        roughness: 0.25,
+        metalness: 0.3,
+      });
+      const diamondGeo = new THREE.BoxGeometry(0.012, 0.004, 0.012);
+      const yPos = railHeight - 0.001;
+      for (const f of [0.125, 0.25, 0.375, 0.625, 0.75, 0.875]) {
+        const x = (f - 0.5) * L;
+        [-W / 2 - outerOffset - railThick / 2, W / 2 + outerOffset + railThick / 2].forEach((z) => {
+          const d = new THREE.Mesh(diamondGeo, diamondMat);
+          d.rotation.y = Math.PI / 4;
+          d.position.set(x, yPos, z);
+          this.tableGroup.add(d);
+        });
+      }
+      for (const f of [0.25, 0.5, 0.75]) {
+        const z = (f - 0.5) * W;
+        [-L / 2 - outerOffset - railThick / 2, L / 2 + outerOffset + railThick / 2].forEach((x) => {
+          const d = new THREE.Mesh(diamondGeo, diamondMat);
+          d.rotation.y = Math.PI / 4;
+          d.position.set(x, yPos, z);
+          this.tableGroup.add(d);
+        });
+      }
+    }
+
+    // All 6 Physical Segmented Rubber Cushions with clear beveled lips & pocket gaps
+    this.cushionMaterial = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(currentColor).multiplyScalar(1.22),
+      roughness: 0.58,
+      metalness: 0.05,
+    });
+    const noseMat = new THREE.MeshStandardMaterial({
+      color: 0xd1fae5,
+      emissive: 0x065f46,
+      emissiveIntensity: 0.25,
+      roughness: 0.4,
+      transparent: true,
+      opacity: 0.65,
+    });
+
+    table.cushions.forEach((c) => {
+      const s = this.toThreeCoords(c.start);
+      const e = this.toThreeCoords(c.end);
+      const segLen = Math.hypot(e.x - s.x, e.z - s.z);
+      const cx = (s.x + e.x) / 2;
+      const cz = (s.z + e.z) / 2;
+      const isAlongX = Math.abs(e.x - s.x) >= Math.abs(e.z - s.z);
+
+      const boxW = isAlongX ? segLen : cushionDepth;
+      const boxD = isAlongX ? cushionDepth : segLen;
+      const cushMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(boxW, 0.036, boxD),
+        this.cushionMaterial
+      );
+      const shiftX = -c.normal.x * (cushionDepth / 2);
+      const shiftZ = -c.normal.y * (cushionDepth / 2);
+      cushMesh.position.set(cx + shiftX, 0.018, cz + shiftZ);
+      cushMesh.castShadow = true;
+      cushMesh.receiveShadow = true;
+      this.tableGroup.add(cushMesh);
+
+      // Highlighted rubber contact nose strip along the playing edge
+      const lipW = isAlongX ? segLen : 0.004;
+      const lipD = isAlongX ? 0.004 : segLen;
+      const lipMesh = new THREE.Mesh(new THREE.BoxGeometry(lipW, 0.005, lipD), noseMat);
+      lipMesh.position.set(cx - c.normal.x * 0.002, 0.035, cz - c.normal.y * 0.002);
+      this.tableGroup.add(lipMesh);
+    });
+
+    const skirtHeight = 0.16;
+    const skirtMat = new THREE.MeshStandardMaterial({ color: 0x1b120e, roughness: 0.4 });
+    const skirtN = new THREE.Mesh(new THREE.BoxGeometry(L + (outerOffset + railThick) * 2, skirtHeight, 0.02), skirtMat);
+    skirtN.position.set(0, -0.05 - skirtHeight / 2, -W / 2 - outerOffset - railThick);
+    this.tableGroup.add(skirtN);
+
+    const skirtS = new THREE.Mesh(new THREE.BoxGeometry(L + (outerOffset + railThick) * 2, skirtHeight, 0.02), skirtMat);
+    skirtS.position.set(0, -0.05 - skirtHeight / 2, W / 2 + outerOffset + railThick);
+    this.tableGroup.add(skirtS);
+
+    this.setupTableLegs(L, W);
+    this.setupPockets(table, L, W);
+  }
+
+  private setupRoomEnvironment(): void {
     const floorGeo = new THREE.PlaneGeometry(14, 14);
     const floorMat = new THREE.MeshStandardMaterial({
       color: 0x0c0f14,
@@ -251,78 +430,6 @@ export class ThreeTableRenderer {
     floor.position.y = -0.78;
     floor.receiveShadow = true;
     this.scene.add(floor);
-
-    this.setupRoomEnvironment();
-
-    const bedGeo = new THREE.BoxGeometry(L, 0.05, W);
-    this.bedMaterial = new THREE.MeshStandardMaterial({
-      color: 0x0e5d36,
-      roughness: 0.84,
-      metalness: 0.02,
-    });
-    const bed = new THREE.Mesh(bedGeo, this.bedMaterial);
-    bed.position.y = -0.025;
-    bed.receiveShadow = true;
-    this.scene.add(bed);
-
-    this.setupClothMarkings(L, W);
-
-    const woodMat = new THREE.MeshStandardMaterial({
-      color: 0x421e0e,
-      roughness: 0.28,
-      metalness: 0.14,
-    });
-
-    const endRailGeo = new THREE.BoxGeometry(railThick, railHeight, W + railThick * 2);
-    const baulkRail = new THREE.Mesh(endRailGeo, woodMat);
-    baulkRail.position.set(-L / 2 - railThick / 2, railHeight / 2 - 0.004, 0);
-    baulkRail.castShadow = true;
-    baulkRail.receiveShadow = true;
-    this.scene.add(baulkRail);
-
-    const topRail = new THREE.Mesh(endRailGeo, woodMat);
-    topRail.position.set(L / 2 + railThick / 2, railHeight / 2 - 0.004, 0);
-    topRail.castShadow = true;
-    topRail.receiveShadow = true;
-    this.scene.add(topRail);
-
-    const sideRailGeo = new THREE.BoxGeometry(L, railHeight, railThick);
-    const leftRail = new THREE.Mesh(sideRailGeo, woodMat);
-    leftRail.position.set(0, railHeight / 2 - 0.004, -W / 2 - railThick / 2);
-    leftRail.castShadow = true;
-    leftRail.receiveShadow = true;
-    this.scene.add(leftRail);
-
-    const rightRail = new THREE.Mesh(sideRailGeo, woodMat);
-    rightRail.position.set(0, railHeight / 2 - 0.004, W / 2 + railThick / 2);
-    rightRail.castShadow = true;
-    rightRail.receiveShadow = true;
-    this.scene.add(rightRail);
-
-    const cushionMat = new THREE.MeshStandardMaterial({ color: 0x072b18, roughness: 0.75 });
-    const cNorth = new THREE.Mesh(new THREE.BoxGeometry(L, 0.026, 0.016), cushionMat);
-    cNorth.position.set(0, 0.009, -W / 2 + 0.008);
-    this.scene.add(cNorth);
-
-    const cSouth = new THREE.Mesh(new THREE.BoxGeometry(L, 0.026, 0.016), cushionMat);
-    cSouth.position.set(0, 0.009, W / 2 - 0.008);
-    this.scene.add(cSouth);
-
-    const skirtHeight = 0.16;
-    const skirtMat = new THREE.MeshStandardMaterial({ color: 0x241108, roughness: 0.4 });
-    const skirtN = new THREE.Mesh(new THREE.BoxGeometry(L + railThick * 2, skirtHeight, 0.02), skirtMat);
-    skirtN.position.set(0, -0.05 - skirtHeight / 2, -W / 2 - railThick);
-    this.scene.add(skirtN);
-
-    const skirtS = new THREE.Mesh(new THREE.BoxGeometry(L + railThick * 2, skirtHeight, 0.02), skirtMat);
-    skirtS.position.set(0, -0.05 - skirtHeight / 2, W / 2 + railThick);
-    this.scene.add(skirtS);
-
-    this.setupTableLegs(L, W);
-    this.setupPockets(L, W);
-  }
-
-  private setupRoomEnvironment(): void {
     const roomWidth = 14;
     const roomHeight = 4.5;
     const roomDepth = 14;
@@ -379,11 +486,11 @@ export class ThreeTableRenderer {
     });
   }
 
-  private setupClothMarkings(L: number, W: number): void {
-    const baulkX = -1.0475;
+  private setupClothMarkings(table: SnookerTable, L: number, W: number): void {
+    const baulkX = (table.baulkDist - table.length / 2) * 0.001;
     const markingMat = new THREE.LineBasicMaterial({
       color: 0xf5f2eb,
-      opacity: 0.55,
+      opacity: 0.5,
       transparent: true,
     });
 
@@ -391,33 +498,31 @@ export class ThreeTableRenderer {
       new THREE.Vector3(baulkX, 0.001, -W / 2 + 0.01),
       new THREE.Vector3(baulkX, 0.001, W / 2 - 0.01),
     ]);
-    this.scene.add(new THREE.Line(baulkGeo, markingMat));
+    this.tableGroup.add(new THREE.Line(baulkGeo, markingMat));
 
-    const dRadius = SnookerTable.D_RADIUS * 0.001;
-    const dPoints: THREE.Vector3[] = [];
-    const segments = 36;
-    for (let i = 0; i <= segments; i++) {
-      const angle = -Math.PI / 2 + (Math.PI * i) / segments;
-      dPoints.push(new THREE.Vector3(baulkX - Math.cos(angle) * dRadius, 0.001, Math.sin(angle) * dRadius));
+    if (table.hasBaulkAndD && table.dRadius > 0) {
+      const dRadius = table.dRadius * 0.001;
+      const dPoints: THREE.Vector3[] = [];
+      const segments = 36;
+      for (let i = 0; i <= segments; i++) {
+        const angle = -Math.PI / 2 + (Math.PI * i) / segments;
+        dPoints.push(new THREE.Vector3(baulkX - Math.cos(angle) * dRadius, 0.001, Math.sin(angle) * dRadius));
+      }
+      const dGeo = new THREE.BufferGeometry().setFromPoints(dPoints);
+      this.tableGroup.add(new THREE.Line(dGeo, markingMat));
     }
-    const dGeo = new THREE.BufferGeometry().setFromPoints(dPoints);
-    this.scene.add(new THREE.Line(dGeo, markingMat));
 
     const spotMat = new THREE.MeshBasicMaterial({ color: 0xf5f2eb, opacity: 0.65, transparent: true });
-    const spotPositions = [
-      new THREE.Vector3(1.4605, 0.001, 0),
-      new THREE.Vector3(0.8923, 0.001, 0),
-      new THREE.Vector3(0, 0.001, 0),
-      new THREE.Vector3(baulkX, 0.001, 0),
-      new THREE.Vector3(baulkX, 0.001, -dRadius),
-      new THREE.Vector3(baulkX, 0.001, dRadius),
-    ];
+    const spotsToDraw = table.hasBaulkAndD
+      ? Object.values(table.spots)
+      : [table.spots.BLUE, table.spots.PINK];
 
-    spotPositions.forEach((pos) => {
+    spotsToDraw.forEach((sp) => {
+      const pos = this.toThreeCoords(sp);
       const disc = new THREE.Mesh(new THREE.CircleGeometry(0.007, 16), spotMat);
       disc.rotation.x = -Math.PI / 2;
-      disc.position.copy(pos);
-      this.scene.add(disc);
+      disc.position.set(pos.x, 0.001, pos.z);
+      this.tableGroup.add(disc);
     });
   }
 
@@ -434,31 +539,39 @@ export class ThreeTableRenderer {
       metalness: 0.88,
     });
 
-    const legPositions = [
-      [-L / 2 + 0.14, -W / 2 + 0.1],
-      [-L / 2 + 0.14, W / 2 - 0.1],
-      [L / 2 - 0.14, -W / 2 + 0.1],
-      [L / 2 - 0.14, W / 2 - 0.1],
-      [-L / 6, -W / 2 + 0.1],
-      [-L / 6, W / 2 - 0.1],
-      [L / 6, -W / 2 + 0.1],
-      [L / 6, W / 2 - 0.1],
-    ];
+    const legPositions =
+      L >= 3.0
+        ? [
+            [-L / 2 + 0.14, -W / 2 + 0.1],
+            [-L / 2 + 0.14, W / 2 - 0.1],
+            [L / 2 - 0.14, -W / 2 + 0.1],
+            [L / 2 - 0.14, W / 2 - 0.1],
+            [-L / 6, -W / 2 + 0.1],
+            [-L / 6, W / 2 - 0.1],
+            [L / 6, -W / 2 + 0.1],
+            [L / 6, W / 2 - 0.1],
+          ]
+        : [
+            [-L / 2 + 0.14, -W / 2 + 0.1],
+            [-L / 2 + 0.14, W / 2 - 0.1],
+            [L / 2 - 0.14, -W / 2 + 0.1],
+            [L / 2 - 0.14, W / 2 - 0.1],
+          ];
 
     legPositions.forEach(([lx, lz]) => {
       const leg = new THREE.Mesh(legGeo, legMat);
       leg.position.set(lx, -0.42, lz);
       leg.castShadow = true;
       leg.receiveShadow = true;
-      this.scene.add(leg);
+      this.tableGroup.add(leg);
 
       const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.035, 16), footMat);
       foot.position.set(lx, -0.762, lz);
-      this.scene.add(foot);
+      this.tableGroup.add(foot);
     });
   }
 
-  private setupPockets(L: number, W: number): void {
+  private setupPockets(table: SnookerTable, L: number, W: number): void {
     const brassMat = new THREE.MeshStandardMaterial({
       color: 0xc5a059,
       metalness: 0.9,
@@ -466,91 +579,243 @@ export class ThreeTableRenderer {
     });
     const leatherMat = new THREE.MeshBasicMaterial({ color: 0x05070a });
 
-    const pocketCoords = [
-      [-L / 2, -W / 2],
-      [-L / 2, W / 2],
-      [0, -W / 2],
-      [0, W / 2],
-      [L / 2, -W / 2],
-      [L / 2, W / 2],
-    ];
+    table.pockets.forEach((pocket) => {
+      const px = (pocket.position.x - table.length / 2) * 0.001;
+      const pz = (pocket.position.y - table.width / 2) * 0.001;
+      const pr = pocket.radius * 0.001;
 
-    pocketCoords.forEach(([px, pz]) => {
-      const hole = new THREE.Mesh(new THREE.CylinderGeometry(0.046, 0.046, 0.065, 20), leatherMat);
+      const hole = new THREE.Mesh(new THREE.CylinderGeometry(pr, pr, 0.065, 22), leatherMat);
       hole.position.set(px, 0.003, pz);
-      this.scene.add(hole);
+      this.tableGroup.add(hole);
 
-      const cap = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.038, 0.075), brassMat);
-      cap.position.set(px * 1.012, 0.02, pz * 1.012);
+      const capSize = pr * 1.45;
+      const cap = new THREE.Mesh(new THREE.BoxGeometry(capSize, 0.038, capSize), brassMat);
+      cap.position.set(px * 1.015, 0.02, pz * 1.015);
       cap.castShadow = true;
-      this.scene.add(cap);
+      this.tableGroup.add(cap);
     });
   }
 
   private createCueStick(): THREE.Group {
     const group = new THREE.Group();
 
-    this.cueShaftMaterial = new THREE.MeshStandardMaterial({
-      color: 0xd6b37c,
-      roughness: 0.4,
-    });
-    this.cueButtMaterial = new THREE.MeshStandardMaterial({
-      color: 0x1f140d,
-      roughness: 0.3,
-    });
+    // Procedural Ash Feather Grain Shaft Texture
+    const shaftCanvas = document.createElement('canvas');
+    shaftCanvas.width = 256;
+    shaftCanvas.height = 512;
+    const sgCtx = shaftCanvas.getContext('2d');
+    if (sgCtx) {
+      sgCtx.fillStyle = '#F2DEC0';
+      sgCtx.fillRect(0, 0, 256, 512);
+      sgCtx.strokeStyle = 'rgba(130, 88, 42, 0.22)';
+      sgCtx.lineWidth = 2.5;
+      for (let y = 16; y < 500; y += 26) {
+        for (let x = 0; x < 256; x += 64) {
+          sgCtx.beginPath();
+          sgCtx.moveTo(x, y + 20);
+          sgCtx.quadraticCurveTo(x + 32, y - 6, x + 64, y + 20);
+          sgCtx.stroke();
+        }
+      }
+    }
+    const shaftTex = new THREE.CanvasTexture(shaftCanvas);
+
+    this.cueShaftMaterial = new THREE.MeshPhysicalMaterial({
+      color: 0xdcc08c,
+      map: shaftTex,
+      roughness: 0.22,
+      metalness: 0.04,
+      clearcoat: 0.85,
+      clearcoatRoughness: 0.14,
+    }) as any;
+
+    // Hand-spliced 4-point rosewood & ebony butt weave with emerald/gold veneers
+    const spliceCanvas = document.createElement('canvas');
+    spliceCanvas.width = 256;
+    spliceCanvas.height = 256;
+    const sctx = spliceCanvas.getContext('2d');
+    if (sctx) {
+      sctx.fillStyle = '#EBD3AA';
+      sctx.fillRect(0, 0, 256, 256);
+      for (let i = 0; i < 4; i++) {
+        const cx = i * 64 + 32;
+        // Outer amber/rosewood splice
+        sctx.fillStyle = '#7C3E18';
+        sctx.beginPath();
+        sctx.moveTo(cx, 18);
+        sctx.lineTo(cx + 30, 145);
+        sctx.lineTo(cx + 30, 256);
+        sctx.lineTo(cx - 30, 256);
+        sctx.lineTo(cx - 30, 145);
+        sctx.closePath();
+        sctx.fill();
+
+        // Fine emerald & gold veneer chevron
+        sctx.strokeStyle = '#10B981';
+        sctx.lineWidth = 3;
+        sctx.stroke();
+
+        // Inner dark ebony heartwood splice
+        sctx.fillStyle = '#140E0B';
+        sctx.beginPath();
+        sctx.moveTo(cx, 54);
+        sctx.lineTo(cx + 21, 165);
+        sctx.lineTo(cx + 21, 256);
+        sctx.lineTo(cx - 21, 256);
+        sctx.lineTo(cx - 21, 165);
+        sctx.closePath();
+        sctx.fill();
+      }
+      // Subtle brass plaque band near bottom
+      sctx.fillStyle = '#D4AF63';
+      sctx.fillRect(108, 212, 40, 14);
+    }
+    const buttTex = new THREE.CanvasTexture(spliceCanvas);
+
+    this.cueButtMaterial = new THREE.MeshPhysicalMaterial({
+      color: 0xffffff,
+      map: buttTex,
+      roughness: 0.16,
+      metalness: 0.06,
+      clearcoat: 0.95,
+      clearcoatRoughness: 0.08,
+    }) as any;
+
     const brassMat = new THREE.MeshStandardMaterial({
-      color: 0xc5a059,
-      metalness: 0.9,
-      roughness: 0.2,
+      color: 0xe2c074,
+      metalness: 0.94,
+      roughness: 0.16,
+    });
+    const collarDarkMat = new THREE.MeshStandardMaterial({
+      color: 0x0e1116,
+      roughness: 0.3,
+      metalness: 0.1,
+    });
+    const rubberMat = new THREE.MeshStandardMaterial({
+      color: 0x101318,
+      roughness: 0.85,
+      metalness: 0.05,
     });
     this.cueTipMaterial = new THREE.MeshBasicMaterial({ color: 0x2563eb });
 
-    const shaftGeo = new THREE.CylinderGeometry(0.0048, 0.011, 0.95, 20);
+    // Authentic 3/4 British Playing Shaft (1.04m)
+    const shaftGeo = new THREE.CylinderGeometry(0.0046, 0.0114, 1.04, 28);
     shaftGeo.rotateX(-Math.PI / 2);
     const shaft = new THREE.Mesh(shaftGeo, this.cueShaftMaterial);
-    shaft.position.z = -0.475;
+    shaft.position.z = -0.52;
     shaft.castShadow = true;
     group.add(shaft);
 
-    const buttGeo = new THREE.CylinderGeometry(0.011, 0.015, 0.48, 20);
+    // 3/4 Spliced Butt Section (0.41m)
+    const buttGeo = new THREE.CylinderGeometry(0.0114, 0.0148, 0.41, 28);
     buttGeo.rotateX(-Math.PI / 2);
     const butt = new THREE.Mesh(buttGeo, this.cueButtMaterial);
-    butt.position.z = -1.19;
+    butt.position.z = -1.245;
     butt.castShadow = true;
     group.add(butt);
 
-    const jointGeo = new THREE.CylinderGeometry(0.0112, 0.0112, 0.015, 20);
+    // 3/4 Joint Brass Core & Twin Phenolic Collars
+    const jointRimGeo = new THREE.CylinderGeometry(0.0117, 0.0117, 0.032, 24);
+    jointRimGeo.rotateX(-Math.PI / 2);
+    const jointRim = new THREE.Mesh(jointRimGeo, collarDarkMat);
+    jointRim.position.z = -1.04;
+    group.add(jointRim);
+
+    const jointGeo = new THREE.CylinderGeometry(0.0118, 0.0118, 0.02, 24);
     jointGeo.rotateX(-Math.PI / 2);
     const joint = new THREE.Mesh(jointGeo, brassMat);
-    joint.position.z = -0.95;
+    joint.position.z = -1.04;
     group.add(joint);
 
-    const ferruleGeo = new THREE.CylinderGeometry(0.005, 0.005, 0.012, 16);
+    // Brass Butt Collar & Stepped Rubber Bumper
+    const buttCollarGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.016, 24);
+    buttCollarGeo.rotateX(-Math.PI / 2);
+    const buttCollar = new THREE.Mesh(buttCollarGeo, brassMat);
+    buttCollar.position.z = -1.452;
+    group.add(buttCollar);
+
+    const bumperGeo = new THREE.CylinderGeometry(0.0145, 0.0125, 0.022, 20);
+    bumperGeo.rotateX(-Math.PI / 2);
+    const bumper = new THREE.Mesh(bumperGeo, rubberMat);
+    bumper.position.z = -1.468;
+    group.add(bumper);
+
+    // Precision Machined Brass Ferrule
+    const ferruleGeo = new THREE.CylinderGeometry(0.0047, 0.0048, 0.014, 24);
     ferruleGeo.rotateX(-Math.PI / 2);
     const ferrule = new THREE.Mesh(ferruleGeo, brassMat);
-    ferrule.position.z = -0.006;
+    ferrule.position.z = -0.007;
     group.add(ferrule);
 
-    const tipGeo = new THREE.CylinderGeometry(0.0048, 0.0048, 0.005, 16);
-    tipGeo.rotateX(-Math.PI / 2);
-    const tip = new THREE.Mesh(tipGeo, this.cueTipMaterial);
-    tip.position.z = 0.0025;
-    group.add(tip);
+    // Domed Multi-Layered Chalked Tip
+    const tipBaseGeo = new THREE.CylinderGeometry(0.0046, 0.0047, 0.004, 20);
+    tipBaseGeo.rotateX(-Math.PI / 2);
+    const tipBase = new THREE.Mesh(tipBaseGeo, this.cueTipMaterial);
+    tipBase.position.z = 0.002;
+    group.add(tipBase);
+
+    const tipDomeGeo = new THREE.SphereGeometry(0.0046, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2);
+    tipDomeGeo.rotateX(Math.PI / 2);
+    const tipDome = new THREE.Mesh(tipDomeGeo, this.cueTipMaterial);
+    tipDome.position.z = 0.004;
+    group.add(tipDome);
 
     return group;
   }
 
+  private getPoolBallTexture(ball: Ball): THREE.CanvasTexture {
+    const key = `${ball.number ?? ball.type}-${ball.isStripe}-${ball.colorInfo.hex}`;
+    const cached = this.poolTextureCache.get(key);
+    if (cached) return cached;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 128;
+    const ctx = canvas.getContext('2d')!;
+    const hex = ball.colorInfo.hex;
+
+    if (ball.isStripe) {
+      ctx.fillStyle = '#F7F3E8';
+      ctx.fillRect(0, 0, 256, 128);
+      ctx.fillStyle = hex;
+      ctx.fillRect(0, 34, 256, 60);
+    } else {
+      ctx.fillStyle = hex;
+      ctx.fillRect(0, 0, 256, 128);
+    }
+
+    if (ball.number !== undefined) {
+      // Draw crisp white circle + number on opposite sides of equator
+      [64, 192].forEach((cx) => {
+        ctx.fillStyle = '#FAF8F2';
+        ctx.beginPath();
+        ctx.arc(cx, 64, 22, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#111418';
+        ctx.font = 'bold 26px "JetBrains Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(ball.number), cx, 65);
+      });
+    }
+
+    const tex = new THREE.CanvasTexture(canvas);
+    this.poolTextureCache.set(key, tex);
+    return tex;
+  }
+
   private toThreeCoords(posMm: { x: number; y: number }): THREE.Vector3 {
-    const x = (posMm.x - SnookerTable.LENGTH / 2) * 0.001;
-    const z = (posMm.y - SnookerTable.WIDTH / 2) * 0.001;
-    const y = SnookerTable.BALL_RADIUS * 0.001;
+    const x = (posMm.x - this.activeTable.length / 2) * 0.001;
+    const z = (posMm.y - this.activeTable.width / 2) * 0.001;
+    const y = this.activeTable.ballRadius * 0.001;
     return new THREE.Vector3(x, y, z);
   }
 
   private toTableMm(vec3: THREE.Vector3): { x: number; y: number } {
     return {
-      x: vec3.x * 1000 + SnookerTable.LENGTH / 2,
-      y: vec3.z * 1000 + SnookerTable.WIDTH / 2,
+      x: vec3.x * 1000 + this.activeTable.length / 2,
+      y: vec3.z * 1000 + this.activeTable.width / 2,
     };
   }
 
@@ -573,8 +838,13 @@ export class ThreeTableRenderer {
     aimAngleRad?: number,
     cuePower: number = 35,
     isAiming: boolean = true,
-    cueElevationDeg: number = 0
+    cueElevationDeg: number = 0,
+    table?: SnookerTable
   ): void {
+    if (table && table.variant !== this.activeTable.variant) {
+      this.setTable(table);
+    }
+
     // Auto-match container size when visible
     if (
       this.container.clientWidth > 0 &&
@@ -585,18 +855,35 @@ export class ThreeTableRenderer {
       this.resize();
     }
 
-    const R = SnookerTable.BALL_RADIUS * 0.001;
+    const activeIds = new Set(balls.map((b) => b.id));
+    for (const [id, mesh] of this.ballMeshes.entries()) {
+      if (!activeIds.has(id)) {
+        this.scene.remove(mesh);
+        mesh.geometry.dispose();
+        this.ballMeshes.delete(id);
+      }
+    }
+
+    const R = this.activeTable.ballRadius * 0.001;
 
     // 1. Synchronize Ball Meshes
     balls.forEach((ball) => {
       let mesh = this.ballMeshes.get(ball.id);
       if (!mesh) {
-        const geo = new THREE.SphereGeometry(R, 32, 32);
-        const mat = new THREE.MeshStandardMaterial({
-          color: new THREE.Color(ball.colorInfo.hex),
-          roughness: 0.05,
-          metalness: 0.06,
-        });
+        const geo = new THREE.SphereGeometry(ball.radius * 0.001 || R, 32, 32);
+        const hasPoolArt = ball.number !== undefined || ball.isStripe;
+        const mat = hasPoolArt
+          ? new THREE.MeshStandardMaterial({
+              color: 0xffffff,
+              map: this.getPoolBallTexture(ball),
+              roughness: 0.08,
+              metalness: 0.05,
+            })
+          : new THREE.MeshStandardMaterial({
+              color: new THREE.Color(ball.colorInfo.hex),
+              roughness: 0.05,
+              metalness: 0.06,
+            });
         mesh = new THREE.Mesh(geo, mat);
         mesh.castShadow = true;
         mesh.receiveShadow = true;

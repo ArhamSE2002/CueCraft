@@ -1,71 +1,57 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { PhysicsEngine } from '../../engine/physics/PhysicsEngine';
 import { CanvasTableRenderer } from '../../renderers/2d/CanvasTableRenderer';
 import { Vector2D } from '../../engine/math/Vector2D';
 import { Ball } from '../../engine/physics/Ball';
+import { SnookerTable } from '../../engine/table/SnookerTable';
 import { RotateCcw, ArrowRight } from 'lucide-react';
 
 export const InteractiveHeroDemo: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<PhysicsEngine | null>(null);
-  const rendererRef = useRef<CanvasTableRenderer | null>(null);
-  const activeShotRef = useRef<'screw' | 'follow' | 'cushion'>('screw');
-
   const [activeShot, setActiveShot] = useState<'screw' | 'follow' | 'cushion'>('screw');
-  const [shotDescription, setShotDescription] = useState<string>(
-    'Deep Screw (Backspin): Cue ball struck low at -80% offset, reversing cleanly backward upon contact.'
+  const activeShotRef = useRef<'screw' | 'follow' | 'cushion'>('screw');
+  const [shotDescription, setShotDescription] = useState(
+    'Low tip contact (-0.82Y) imparts reverse angular velocity, drawing the cue ball backward off the red.'
   );
 
-  const setupShotScenario = (type: 'screw' | 'follow' | 'cushion') => {
-    setActiveShot(type);
-    activeShotRef.current = type;
-    if (!engineRef.current) return;
+  const setupShotScenario = (mode: 'screw' | 'follow' | 'cushion') => {
     const engine = engineRef.current;
+    if (!engine) return;
 
-    if (type === 'screw') {
+    setActiveShot(mode);
+    activeShotRef.current = mode;
+    engine.isSimulating = false;
+    engine.invalidatePredictionCache();
+
+    if (mode === 'screw') {
       engine.balls = [
-        new Ball('cue', 'cue', new Vector2D(1200, 889)),
-        new Ball('red', 'red', new Vector2D(2000, 889)),
-        new Ball('black', 'black', new Vector2D(3245, 889)),
+        new Ball('cue', 'cue', new Vector2D(820, SnookerTable.WIDTH / 2)),
+        new Ball('red-1', 'red', new Vector2D(2100, SnookerTable.WIDTH / 2)),
+        new Ball('black', 'black', SnookerTable.SPOTS.BLACK.clone()),
       ];
-      engine.isSimulating = false;
       setShotDescription(
-        'Deep Screw (Backspin): Cue ball struck low at -80% offset, reversing cleanly backward along the shot axis.'
+        'Low tip contact (-0.82Y) imparts reverse angular velocity, drawing the cue ball cleanly back after potting.'
       );
-      setTimeout(() => {
-        if (activeShotRef.current === 'screw') {
-          engine.strikeCueBall(68, 0, 0, -0.82, 0, false);
-        }
-      }, 450);
-    } else if (type === 'follow') {
+      setTimeout(() => engine.strikeCueBall(68, 0, 0, -0.82, 0, false), 550);
+    } else if (mode === 'follow') {
       engine.balls = [
-        new Ball('cue', 'cue', new Vector2D(1200, 889)),
-        new Ball('red', 'red', new Vector2D(2000, 889)),
-        new Ball('black', 'black', new Vector2D(3245, 889)),
+        new Ball('cue', 'cue', new Vector2D(820, SnookerTable.WIDTH / 2)),
+        new Ball('blue', 'blue', new Vector2D(1900, SnookerTable.WIDTH / 2)),
       ];
-      engine.isSimulating = false;
       setShotDescription(
-        'Topspin Follow: Cue ball struck high at +80% offset, accelerating smoothly behind the potted red toward black.'
+        'Topspin (+0.82Y) preserves forward angular acceleration so the cue ball surges smoothly past impact.'
       );
-      setTimeout(() => {
-        if (activeShotRef.current === 'follow') {
-          engine.strikeCueBall(60, 0, 0, 0.82, 0, false);
-        }
-      }, 450);
-    } else if (type === 'cushion') {
+      setTimeout(() => engine.strikeCueBall(60, 0, 0, 0.82, 0, false), 550);
+    } else if (mode === 'cushion') {
       engine.balls = [
-        new Ball('cue', 'cue', new Vector2D(1000, 600)),
-        new Ball('red', 'red', new Vector2D(2400, 350)),
+        new Ball('cue', 'cue', new Vector2D(820, SnookerTable.WIDTH / 2 + 200)),
+        new Ball('yellow', 'yellow', new Vector2D(2200, 120)),
       ];
-      engine.isSimulating = false;
       setShotDescription(
-        'Running Side English: Right side spin bites the rail, widening the exit angle across the table.'
+        'Heavy right English (+0.80X) bites into the rail rubber, widening the rebound trajectory onto target.'
       );
-      setTimeout(() => {
-        if (activeShotRef.current === 'cushion') {
-          engine.strikeCueBall(68, -0.32, 0.8, 0.2, 0, false);
-        }
-      }, 450);
+      setTimeout(() => engine.strikeCueBall(68, -0.32, 0.80, 0.2, 0, false), 550);
     }
   };
 
@@ -76,7 +62,8 @@ export const InteractiveHeroDemo: React.FC = () => {
     engineRef.current = engine;
 
     const renderer = new CanvasTableRenderer(canvasRef.current);
-    rendererRef.current = renderer;
+    renderer.options.showTrajectories = true;
+    renderer.options.showGhostBall = true;
 
     setupShotScenario('screw');
 
@@ -126,7 +113,7 @@ export const InteractiveHeroDemo: React.FC = () => {
   return (
     <div className="w-full flex flex-col">
       {/* Live Canvas Stage */}
-      <div className="relative w-full aspect-[2/1] rounded-xl overflow-hidden border border-brass-primary/25 bg-felt-darkest shadow-cushion">
+      <div className="relative w-full aspect-[2/1] rounded-2xl overflow-hidden bg-[#060B09]">
         <canvas
           ref={canvasRef}
           className="w-full h-full cursor-pointer"
@@ -134,14 +121,14 @@ export const InteractiveHeroDemo: React.FC = () => {
           title="Click canvas to replay demonstration"
         />
 
-        <div className="absolute top-3 left-3 flex items-center gap-2 px-2.5 py-1 rounded bg-surface-base/85 backdrop-blur border border-surface-subtle text-[10px] font-mono text-brass-primary tracking-wider">
-          <span className="w-1.5 h-1.5 rounded-full bg-brass-primary animate-pulse" />
-          <span>DETERMINISTIC 2D RIGID-BODY LAB</span>
+        <div className="absolute top-3 left-3 flex items-center gap-2 px-3 py-1 rounded-full bg-arena-bg/85 backdrop-blur border border-white/10 text-[10px] font-mono text-emerald-bright tracking-wider">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-bright animate-pulse" />
+          <span>LIVE 240 HZ PHYSICS DEMO</span>
         </div>
       </div>
 
       {/* Tactile Shot Preset Strip */}
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+      <div className="mt-3.5 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-1.5">
           {[
             { id: 'screw' as const, label: 'Deep Screw' },
@@ -151,10 +138,10 @@ export const InteractiveHeroDemo: React.FC = () => {
             <button
               key={preset.id}
               onClick={() => setupShotScenario(preset.id)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
+              className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors ${
                 activeShot === preset.id
-                  ? 'bg-felt-surface text-ivory-text border-brass-primary/50'
-                  : 'bg-surface-card text-ivory-muted border-surface-subtle hover:text-ivory-text'
+                  ? 'bg-emerald-bright text-arena-bg font-bold'
+                  : 'bg-arena-panel text-arena-muted border border-arena-border hover:text-white'
               }`}
             >
               {preset.label}
@@ -164,18 +151,18 @@ export const InteractiveHeroDemo: React.FC = () => {
 
         <button
           onClick={() => setupShotScenario(activeShot)}
-          className="flex items-center gap-1.5 text-xs text-brass-primary hover:text-brass-hover transition-colors font-medium px-2 py-1"
+          className="flex items-center gap-1.5 text-xs text-emerald-bright hover:text-white transition-colors font-medium px-2.5 py-1"
         >
           <RotateCcw className="w-3.5 h-3.5" />
           <span>Replay Shot</span>
         </button>
       </div>
 
-      <div className="mt-2.5 flex items-center justify-between gap-4 text-xs text-ivory-muted border-t border-surface-subtle/60 pt-2.5">
+      <div className="mt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-arena-muted border-t border-white/10 pt-3">
         <p className="leading-relaxed">{shotDescription}</p>
         <a
           href="/play"
-          className="shrink-0 flex items-center gap-1 text-brass-primary hover:text-brass-hover font-semibold transition-colors group"
+          className="shrink-0 flex items-center gap-1 text-emerald-bright hover:text-white font-semibold transition-colors group"
         >
           <span>Take Control</span>
           <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
