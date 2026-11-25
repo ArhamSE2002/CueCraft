@@ -12,10 +12,11 @@ export interface CollisionEvent {
 export class Collisions {
   public static readonly RESTITUTION = 0.96; // Standard phenolic resin ball elasticity
   public static readonly THROW_COEFFICIENT = 0.03; // Cut-induced throw friction
+  public static readonly SPIN_THROW_COEFF = 0.004; // Spin-induced throw (yaw)
 
   /**
    * Resolves collision between two balls if they overlap and are approaching.
-   * Returns collision event if a physical impact occurred.
+   * Preserves 2D rollVel so cloth sliding friction naturally generates follow and screw curves.
    */
   public static resolveBallCollision(ballA: Ball, ballB: Ball): CollisionEvent | null {
     if (ballA.potted || ballB.potted) return null;
@@ -51,28 +52,21 @@ export class Collisions {
     ballA.velocity = ballA.velocity.sub(impulse);
     ballB.velocity = ballB.velocity.add(impulse);
 
-    // Cut-induced throw (tangential friction)
+    // Cut-induced throw + Spin-induced throw (tangential friction)
     const tangent = normal.perpendicular();
     const velAlongTangent = relVel.dot(tangent);
-    const throwImpulseMag = velAlongTangent * this.THROW_COEFFICIENT;
+    const spinThrow = (ballA.spin.yaw - ballB.spin.yaw) * ballA.radius * this.SPIN_THROW_COEFF * velAlongNormal * 0.05;
+    const throwImpulseMag = velAlongTangent * this.THROW_COEFFICIENT - spinThrow;
     const throwImpulse = tangent.scale(throwImpulseMag);
 
     ballA.velocity = ballA.velocity.sub(throwImpulse);
     ballB.velocity = ballB.velocity.add(throwImpulse);
 
-    // Spin transfer: Side-spin on ball A transfers small opposite side-spin to ball B
+    // Spin transfer: Side-spin on ball A transfers opposite side-spin to ball B
     if (Math.abs(ballA.spin.yaw) > 0.1) {
-      const transferredSpin = ballA.spin.yaw * 0.12;
+      const transferredSpin = ballA.spin.yaw * 0.14;
       ballB.spin.yaw -= transferredSpin;
-      ballA.spin.yaw *= 0.88;
-    }
-
-    // If ballA had severe backspin (screw), when forward normal velocity is absorbed,
-    // the remaining backspin immediately begins biting the cloth backwards
-    if (ballA.type === 'cue' && ballA.spin.pitch < -20) {
-      // The classic screw-back behavior
-      const screwForce = Math.abs(ballA.spin.pitch) * 12;
-      ballA.velocity = ballA.velocity.sub(normal.scale(screwForce));
+      ballA.spin.yaw *= 0.86;
     }
 
     return {

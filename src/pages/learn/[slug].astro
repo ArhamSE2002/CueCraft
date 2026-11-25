@@ -1,5 +1,6 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
+import { LessonPlayLab } from '../../components/learn/LessonPlayLab';
 
 export async function getStaticPaths() {
   const articles = [
@@ -204,22 +205,7 @@ const { article } = Astro.props;
     {/* Content Body */}
     <div class="prose prose-invert max-w-none text-ivory-text leading-relaxed" set:html={article.content} />
 
-    {/* Interactive Practice Callout */}
-    <div class="mt-14 p-6 sm:p-8 rounded-2xl bg-surface-card border border-surface-subtle flex flex-col sm:flex-row items-center justify-between gap-6 shadow-xl">
-      <div>
-        <h3 class="font-serif text-lg font-bold text-ivory-text mb-1">
-          Experiment with this shot live in the simulator
-        </h3>
-        <p class="text-xs text-ivory-muted">
-          Adjust cue-ball contact offset and watch trajectory lines calculate in real time.
-        </p>
-      </div>
-      <a
-        href="/play"
-        class="px-6 py-3 rounded-xl bg-brass-primary text-surface-base font-bold text-xs uppercase tracking-wider hover:bg-brass-hover transition-all shrink-0 shadow-brass-glow"
-      >
-        Launch Table Simulator
-      </a>
-    </div>
+    {/* Interactive Lecture Playable Simulator matching this article */}
+    <LessonPlayLab client:visible scenarioSlug={article.slug} />
   </article>
 </BaseLayout>

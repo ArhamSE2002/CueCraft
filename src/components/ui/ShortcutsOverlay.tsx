@@ -6,16 +6,18 @@ interface ShortcutsOverlayProps {
 }
 
 const shortcuts = [
-  { keys: ['Space'], action: 'Strike shot' },
-  { keys: ['←', '→'], action: 'Aim left / right (fine: 0.17°)' },
-  { keys: ['Shift', '←', '→'], action: 'Precision aim (0.057°)' },
-  { keys: ['Ctrl', '←', '→'], action: 'Coarse aim (2°)' },
+  { keys: ['Space'], action: 'Strike shot (works in 2D & 3D)' },
+  { keys: ['←', '→'], action: 'Aim left / right by step sensitivity' },
+  { keys: ['Shift', '←', '→'], action: 'Ultra-fine aim (0.2x step)' },
+  { keys: ['Ctrl', '←', '→'], action: 'Fast aim (10x step)' },
   { keys: ['↑', '↓'], action: 'Increase / decrease power' },
-  { keys: ['T'], action: 'Toggle trajectory guide' },
-  { keys: ['R'], action: 'Toggle full-route / direction' },
+  { keys: ['M'], action: 'Toggle Aim vs. Move Balls mode' },
+  { keys: ['T'], action: 'Toggle trajectory guides' },
+  { keys: ['R'], action: 'Toggle Full Route vs. Aim Ray' },
   { keys: ['G'], action: 'Toggle ghost ball' },
-  { keys: ['Scroll'], action: 'Zoom in / out' },
+  { keys: ['F'], action: 'Toggle 3D Camera Stiff vs. Follow' },
   { keys: ['C'], action: 'Reset cue ball to D' },
+  { keys: ['Scroll'], action: 'Zoom in / out' },
   { keys: ['?'], action: 'Show this overlay' },
 ];
 
@@ -29,7 +31,6 @@ export const ShortcutsOverlay: React.FC<ShortcutsOverlayProps> = ({ onClose }) =
         className="relative w-full max-w-sm mx-4 bg-surface-card border border-surface-subtle rounded-2xl shadow-2xl p-6"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2">
             <Keyboard className="w-4 h-4 text-brass-primary" />
@@ -45,7 +46,6 @@ export const ShortcutsOverlay: React.FC<ShortcutsOverlayProps> = ({ onClose }) =
           </button>
         </div>
 
-        {/* Shortcuts list */}
         <div className="space-y-2">
           {shortcuts.map(({ keys, action }) => (
             <div key={action} className="flex items-center justify-between gap-3">

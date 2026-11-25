@@ -1,13 +1,16 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { useGameStore } from '../../stores/gameStore';
+import { TIP_CATALOG } from '../../engine/equipment/Equipment';
 
 export const SpinSelector: React.FC = () => {
-  const { spinX, spinY, setSpin, cueElevationDeg, setCueElevationDeg } = useGameStore();
+  const { spinX, spinY, setSpin, cueElevationDeg, setCueElevationDeg, tipId } = useGameStore();
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [showElevation, setShowElevation] = useState(false);
 
-  const ballRadiusPx = 42; // Compact radius so it fits comfortably
+  const activeTip = TIP_CATALOG.find((t) => t.id === tipId) ?? TIP_CATALOG[1];
+  const maxOffset = activeTip.maxSpinOffset;
+  const ballRadiusPx = 40;
 
   const handlePointer = useCallback(
     (clientX: number, clientY: number) => {
@@ -20,14 +23,14 @@ export const SpinSelector: React.FC = () => {
       let dy = (clientY - centerY) / (rect.height / 2);
 
       const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist > 0.82) {
-        dx = (dx / dist) * 0.82;
-        dy = (dy / dist) * 0.82;
+      if (dist > maxOffset) {
+        dx = (dx / dist) * maxOffset;
+        dy = (dy / dist) * maxOffset;
       }
 
       setSpin(Number(dx.toFixed(2)), Number((-dy).toFixed(2)));
     },
-    [setSpin]
+    [setSpin, maxOffset]
   );
 
   const onMouseDown = (e: React.MouseEvent) => {
@@ -69,28 +72,32 @@ export const SpinSelector: React.FC = () => {
   }, [isDragging, handlePointer]);
 
   const getSpinDescription = (): string => {
-    if (cueElevationDeg > 15 && Math.abs(spinX) > 0.15) {
+    if (cueElevationDeg >= 65 && Math.abs(spinX) > 0.25) {
+      return `Table Spin (${cueElevationDeg}°)`;
+    }
+    if (cueElevationDeg > 12 && Math.abs(spinX) > 0.15) {
       return `Masse / Swerve (${cueElevationDeg}°)`;
     }
-    if (Math.abs(spinX) < 0.1 && Math.abs(spinY) < 0.1) return 'Dead Center (Stun)';
+    if (Math.abs(spinX) < 0.1 && Math.abs(spinY) < 0.1) return 'Center (Stun)';
     let desc = '';
-    if (spinY > 0.3) desc += 'Follow ';
-    else if (spinY < -0.3) desc += 'Screw ';
+    if (spinY > 0.25) desc += 'Follow ';
+    else if (spinY < -0.25) desc += 'Screw ';
 
-    if (spinX > 0.3) desc += 'Right';
-    else if (spinX < -0.3) desc += 'Left';
+    if (spinX > 0.25) desc += '+ Right';
+    else if (spinX < -0.25) desc += '+ Left';
 
-    return desc.trim() || 'Subtle Spin';
+    return desc.replace(/^\+\s*/, '').trim() || 'Subtle Spin';
   };
 
   const dotX = spinX * ballRadiusPx;
   const dotY = -spinY * ballRadiusPx;
+  const safeCirclePct = Math.round(maxOffset * 100);
 
   return (
-    <div className="flex flex-col items-center bg-surface-card border border-surface-subtle p-2 rounded-xl shadow-lg w-full max-w-[210px]">
+    <div className="flex flex-col items-center bg-surface-card border border-surface-subtle p-2 rounded-xl shadow-lg w-full max-w-[235px]">
       <div className="flex items-center justify-between w-full mb-1">
-        <span className="text-[11px] uppercase tracking-wider font-semibold text-brass-primary">
-          Spin &amp; Elevation
+        <span className="text-[10px] uppercase tracking-wider font-semibold text-brass-primary">
+          Spin &amp; Angle
         </span>
         <div className="flex items-center gap-1.5">
           <button
@@ -100,9 +107,9 @@ export const SpinSelector: React.FC = () => {
                 ? 'bg-brass-primary text-surface-base font-bold border-brass-primary'
                 : 'text-ivory-faint border-surface-subtle hover:text-ivory-text'
             }`}
-            title="Toggle Cue Butt Elevation Angle for Swerve & Masse shots"
+            title="Toggle Cue Butt Elevation Angle (0° level to 85° vertical spin)"
           >
-            {cueElevationDeg > 0 ? `${cueElevationDeg}° Elev` : 'Elevation'}
+            {cueElevationDeg > 0 ? `${cueElevationDeg}° Butt` : 'Cue Angle'}
           </button>
           <button
             onClick={() => {
@@ -110,7 +117,7 @@ export const SpinSelector: React.FC = () => {
               setCueElevationDeg(0);
             }}
             className="text-[9px] text-ivory-faint hover:text-ivory-text transition-colors underline"
-            title="Reset to level center"
+            title="Reset to center level"
           >
             Reset
           </button>
@@ -118,7 +125,7 @@ export const SpinSelector: React.FC = () => {
       </div>
 
       <div className="flex items-center gap-2.5 w-full justify-center">
-        {/* Interactive Cue Ball Sphere */}
+        {/* Interactive Cue Ball Face */}
         <div
           ref={containerRef}
           onMouseDown={onMouseDown}
@@ -131,12 +138,17 @@ export const SpinSelector: React.FC = () => {
         >
           <div className="absolute w-full h-[1px] bg-black/15 pointer-events-none" />
           <div className="absolute h-full w-[1px] bg-black/15 pointer-events-none" />
-          <div className="absolute w-[82%] h-[82%] rounded-full border border-dashed border-red-500/25 pointer-events-none" />
-
-          {/* Red Contact Dot */}
+          {/* Dynamic Safe-Zone Radius Ring matching active Tip Hardness */}
           <div
-            className="absolute w-3.5 h-3.5 rounded-full bg-red-600 border border-white shadow-md pointer-events-none"
+            className="absolute rounded-full border border-dashed border-red-500/35 pointer-events-none"
+            style={{ width: `${safeCirclePct}%`, height: `${safeCirclePct}%` }}
+          />
+
+          {/* Tip Contact Indicator */}
+          <div
+            className="absolute w-3.5 h-3.5 rounded-full border border-white shadow-md pointer-events-none"
             style={{
+              backgroundColor: activeTip.colorHex,
               transform: `translate(${dotX}px, ${dotY}px)`,
             }}
           >
@@ -144,29 +156,28 @@ export const SpinSelector: React.FC = () => {
           </div>
         </div>
 
-        {/* Spin & Elevation Details */}
+        {/* Telemetry + Elevation Slider */}
         <div className="flex flex-col flex-1 justify-center min-w-0">
           <span className="text-[11px] font-bold text-ivory-text truncate">
             {getSpinDescription()}
           </span>
           <span className="text-[9px] font-mono text-ivory-muted truncate">
-            X: {(spinX * 26.25).toFixed(1)}mm
+            Side: {(spinX * 26.25).toFixed(1)}mm
           </span>
           <span className="text-[9px] font-mono text-ivory-muted truncate">
-            Y: {(spinY * 26.25).toFixed(1)}mm
+            Vert: {(spinY * 26.25).toFixed(1)}mm
           </span>
 
-          {/* Elevation Slider when toggled or non-zero */}
-          {showElevation && (
+          {(showElevation || cueElevationDeg > 0) && (
             <div className="flex flex-col mt-1 pt-1 border-t border-surface-subtle">
               <div className="flex items-center justify-between text-[9px] font-mono text-brass-primary">
-                <span>Elev:</span>
+                <span>Butt Elev:</span>
                 <span>{cueElevationDeg}°</span>
               </div>
               <input
                 type="range"
                 min="0"
-                max="65"
+                max="85"
                 value={cueElevationDeg}
                 onChange={(e) => setCueElevationDeg(Number(e.target.value))}
                 className="w-full h-1.5 bg-surface-base rounded appearance-none cursor-pointer accent-brass-primary"
@@ -176,61 +187,96 @@ export const SpinSelector: React.FC = () => {
         </div>
       </div>
 
-      {/* Quick Presets */}
+      {/* Expanded Spin Presets (8 regimes) */}
       <div className="grid grid-cols-4 gap-1 w-full mt-1.5 text-[9px] font-mono">
         <button
-          onClick={() => {
-            setSpin(0, 0.7);
-            setCueElevationDeg(0);
-          }}
+          onClick={() => { setSpin(0, 0.78); setCueElevationDeg(0); }}
           className={`py-0.5 rounded border transition-colors ${
             spinY > 0.5 && Math.abs(spinX) < 0.2 && cueElevationDeg === 0
               ? 'bg-brass-primary text-surface-base font-bold border-brass-primary'
               : 'border-surface-subtle text-ivory-muted hover:bg-surface-elevated'
           }`}
+          title="Topspin Follow"
         >
-          Top
+          Follow
         </button>
         <button
-          onClick={() => {
-            setSpin(0, 0);
-            setCueElevationDeg(0);
-          }}
+          onClick={() => { setSpin(0, 0); setCueElevationDeg(0); }}
           className={`py-0.5 rounded border transition-colors ${
             Math.abs(spinX) < 0.1 && Math.abs(spinY) < 0.1 && cueElevationDeg === 0
               ? 'bg-brass-primary text-surface-base font-bold border-brass-primary'
               : 'border-surface-subtle text-ivory-muted hover:bg-surface-elevated'
           }`}
+          title="Center Ball Stun"
         >
           Stun
         </button>
         <button
-          onClick={() => {
-            setSpin(0, -0.75);
-            setCueElevationDeg(0);
-          }}
+          onClick={() => { setSpin(0, -0.78); setCueElevationDeg(0); }}
           className={`py-0.5 rounded border transition-colors ${
             spinY < -0.5 && Math.abs(spinX) < 0.2 && cueElevationDeg === 0
               ? 'bg-brass-primary text-surface-base font-bold border-brass-primary'
               : 'border-surface-subtle text-ivory-muted hover:bg-surface-elevated'
           }`}
+          title="Pure Backspin Screw"
         >
           Screw
         </button>
         <button
-          onClick={() => {
-            setSpin(0.65, -0.2);
-            setCueElevationDeg(35);
-            setShowElevation(true);
-          }}
+          onClick={() => { setSpin(0.75, 0); setCueElevationDeg(0); }}
           className={`py-0.5 rounded border transition-colors ${
-            cueElevationDeg > 15
+            spinX > 0.5 && Math.abs(spinY) < 0.2 && cueElevationDeg === 0
               ? 'bg-brass-primary text-surface-base font-bold border-brass-primary'
               : 'border-surface-subtle text-ivory-muted hover:bg-surface-elevated'
           }`}
-          title="Swerve Curve Shot (Elevated cue butt with right side)"
+          title="Right Side English"
+        >
+          Right
+        </button>
+
+        <button
+          onClick={() => { setSpin(-0.75, 0); setCueElevationDeg(0); }}
+          className={`py-0.5 rounded border transition-colors ${
+            spinX < -0.5 && Math.abs(spinY) < 0.2 && cueElevationDeg === 0
+              ? 'bg-brass-primary text-surface-base font-bold border-brass-primary'
+              : 'border-surface-subtle text-ivory-muted hover:bg-surface-elevated'
+          }`}
+          title="Left Side English"
+        >
+          Left
+        </button>
+        <button
+          onClick={() => { setSpin(0.55, -0.62); setCueElevationDeg(0); }}
+          className={`py-0.5 rounded border transition-colors ${
+            spinY < -0.4 && Math.abs(spinX) > 0.35 && cueElevationDeg === 0
+              ? 'bg-brass-primary text-surface-base font-bold border-brass-primary'
+              : 'border-surface-subtle text-ivory-muted hover:bg-surface-elevated'
+          }`}
+          title="Power Side Screw"
+        >
+          SideDraw
+        </button>
+        <button
+          onClick={() => { setSpin(0.7, -0.2); setCueElevationDeg(38); setShowElevation(true); }}
+          className={`py-0.5 rounded border transition-colors ${
+            cueElevationDeg >= 15 && cueElevationDeg < 65
+              ? 'bg-brass-primary text-surface-base font-bold border-brass-primary'
+              : 'border-surface-subtle text-ivory-muted hover:bg-surface-elevated'
+          }`}
+          title="Elevated Swerve Curve (38° butt)"
         >
           Swerve
+        </button>
+        <button
+          onClick={() => { setSpin(0.85, -0.4); setCueElevationDeg(78); setShowElevation(true); }}
+          className={`py-0.5 rounded border transition-colors ${
+            cueElevationDeg >= 65
+              ? 'bg-brass-primary text-surface-base font-bold border-brass-primary'
+              : 'border-surface-subtle text-ivory-muted hover:bg-surface-elevated'
+          }`}
+          title="Steep 78° Masse / Table Spin in Place"
+        >
+          Masse80°
         </button>
       </div>
     </div>

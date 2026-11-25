@@ -3,44 +3,58 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
 const lessons = [
   {
-    id: 'lesson-01',
+    id: 'cue-ball-control',
     level: 'Beginner',
     title: 'The Dead Stop Stun',
-    targetZone: 'Freeze Cue Ball within 50mm of Impact',
+    targetZone: 'Pot Red & Freeze Cue Ball Near Impact',
     difficulty: '★☆☆☆☆',
     description: 'Learn the exact balance of cue power and slight backspin that eliminates forward roll upon contacting the object ball.',
+    lectureSlug: 'cue-ball-control',
   },
   {
-    id: 'lesson-02',
+    id: 'topspin-and-backspin',
     level: 'Intermediate',
     title: 'Screw Back for Black Position',
-    targetZone: 'Draw 600mm Back into Black Ball Zone',
+    targetZone: 'Pot Red & Draw Cue Ball Back to Center',
     difficulty: '★★★☆☆',
-    description: 'Pot the red in the middle pocket and use low cue tip contact to draw the cue ball back onto the high-value black.',
+    description: 'Pot the red and use low cue tip contact (-0.75Y) to draw the cue ball smoothly backward onto high-value position.',
+    lectureSlug: 'topspin-and-backspin',
   },
   {
-    id: 'lesson-03',
+    id: 'topspin-follow',
     level: 'Intermediate',
     title: 'Topspin Follow-Through Break',
-    targetZone: 'Pass Through Object Line by 800mm',
+    targetZone: 'Drive Past Contact Line Toward Black',
     difficulty: '★★☆☆☆',
-    description: 'High tip contact generates forward angular momentum, propelling the cue ball past the object ball into position.',
+    description: 'High tip contact (+0.78Y) generates forward angular momentum, propelling the cue ball cleanly through the contact line.',
+    lectureSlug: 'topspin-and-backspin',
   },
   {
-    id: 'lesson-04',
+    id: 'cushion-rebounds',
     level: 'Advanced',
     title: 'Two-Cushion Snooker Escape',
-    targetZone: 'Contact Red Snookered Behind Baulk Colors',
+    targetZone: 'Escape Blocking Colors via Two Rails',
     difficulty: '★★★★☆',
-    description: 'Calculate multi-cushion diamond reflections to escape a tight snooker without conceding a foul.',
+    description: 'Calculate multi-cushion rebound paths factoring normal cushion restitution (e ≈ 0.72) to escape tight snookers.',
+    lectureSlug: 'cushion-rebounds',
   },
   {
-    id: 'lesson-05',
+    id: 'side-spin-ballistics',
     level: 'Master',
     title: 'Running Side Cushion Drift',
-    targetZone: 'Travel Full Table Length Along Rail',
+    targetZone: 'Widen Rebound Angle Off Bottom Cushion',
     difficulty: '★★★★★',
-    description: 'Apply running english to widen cushion exit angles and glide the cue ball effortlessly up to the yellow pocket.',
+    description: 'Apply heavy right running English to widen cushion exit angles and maintain speed down the table.',
+    lectureSlug: 'side-spin-ballistics',
+  },
+  {
+    id: 'masse-swerve',
+    level: 'Master',
+    title: 'Elevated Masse Swerve Around Ball',
+    targetZone: 'Bend Around Blocking Blue to Strike Red',
+    difficulty: '★★★★★',
+    description: 'Elevate the cue butt to 40° with heavy right English to curve the cue ball laterally around an obstructing color.',
+    lectureSlug: 'side-spin-ballistics',
   },
 ];
 ---
@@ -58,7 +72,7 @@ const lessons = [
         Guided Practice Scenarios
       </h1>
       <p class="text-base sm:text-lg text-ivory-muted leading-relaxed">
-        Step-by-step challenges engineered to build muscle memory for shot power, tip contact offsets, and precision angle judgment.
+        Step-by-step table drills loaded directly into our deterministic 2D/3D engine with preset setups, physics notes, and full route visualization.
       </p>
     </div>
 
@@ -84,17 +98,25 @@ const lessons = [
             </p>
 
             <div class="p-3 rounded-xl bg-surface-base border border-surface-subtle text-[11px] font-mono text-chalk-cyan mb-6">
-              TARGET: {lesson.targetZone}
+              OBJECTIVE: {lesson.targetZone}
             </div>
           </div>
 
-          <a
-            href="/play"
-            class="w-full py-2.5 px-4 rounded-xl bg-felt-surface hover:bg-felt-accent border border-felt-border text-ivory-text font-semibold text-xs tracking-wider uppercase text-center transition-colors shadow-sm flex items-center justify-center gap-2"
-          >
-            <span>Load Challenge in Simulator</span>
-            <span>&rarr;</span>
-          </a>
+          <div class="flex items-center gap-3">
+            <a
+              href={`/play?scenario=${lesson.id}`}
+              class="flex-1 py-2.5 px-4 rounded-xl bg-brass-primary hover:bg-brass-hover text-surface-base font-bold text-xs tracking-wider uppercase text-center transition-colors shadow-sm flex items-center justify-center gap-2"
+            >
+              <span>Play Scenario</span>
+              <span>&rarr;</span>
+            </a>
+            <a
+              href={`/learn/${lesson.lectureSlug}`}
+              class="py-2.5 px-4 rounded-xl bg-surface-base hover:bg-surface-elevated border border-surface-subtle text-ivory-muted hover:text-ivory-text font-medium text-xs transition-colors"
+            >
+              Theory
+            </a>
+          </div>
         </div>
       ))}
     </div>

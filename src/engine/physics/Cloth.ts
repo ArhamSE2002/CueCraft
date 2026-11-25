@@ -1,81 +1,100 @@
 import { Ball } from './Ball';
+import { Vector2D } from '../math/Vector2D';
+import { CLOTH_CATALOG, type ClothSpec } from '../equipment/Equipment';
 
 export class Cloth {
   // Dimensionally accurate for mm & s
   public static readonly GRAVITY = 9810; // mm/s^2
   public static readonly SLIDING_FRICTION = 0.22; // mu_s
-  public static readonly ROLLING_FRICTION = 0.015; // mu_r
+  public static readonly ROLLING_FRICTION = 0.035; // mu_r (realistic club cloth)
   public static readonly SPIN_DECAY = 0.985; // Side spin dampening per 1/120s step
 
+  public static readonly DEFAULT_CLOTH: ClothSpec = CLOTH_CATALOG[1]; // club-standard
+
   /**
-   * Applies friction over timestep dt (seconds).
-   * Transitions seamlessly between sliding phase (backspin/topspin) and pure rolling.
+   * Applies authentic 2D rigid-body cloth friction over timestep dt (seconds).
+   * Handles 2D sliding friction (generating true parabolic curves for screw/follow cuts),
+   * transitions smoothly into pure rolling friction, and decays vertical yaw spin.
    */
-  public static applyFriction(ball: Ball, dt: number): void {
-    if (ball.potted || ball.isStationary()) {
-      if (ball.velocity.lengthSq() < 1.0) {
-        ball.stop();
-      }
+  public static applyFriction(
+    ball: Ball,
+    dt: number,
+    cloth: ClothSpec = this.DEFAULT_CLOTH
+  ): void {
+    if (ball.potted) return;
+
+    const R = ball.radius; // 26.25 mm
+
+    // Backward-compatibility bridge: if a caller/test set ball.spin.pitch directly without rollVel
+    if (ball.rollVel.lengthSq() < 1e-6 && Math.abs(ball.spin.pitch) > 0.05 && ball.velocity.lengthSq() > 1e-6) {
+      ball.rollVel = ball.velocity.normalize().scale(ball.spin.pitch * R);
+    }
+
+    if (ball.isStationary()) {
+      ball.stop();
       return;
     }
 
-    const speed = ball.velocity.length();
-    const R = ball.radius; // 26.25 mm
-    const dir = speed > 1e-6 ? ball.velocity.scale(1 / speed) : null;
+    const muS = cloth.slidingFriction;
+    const muR = cloth.rollingFriction;
+    const spinDecay = cloth.spinDecay;
 
-    // Ideal rolling angular velocity (rad/s) in direction of travel
-    const idealPitch = speed / R;
-    const pitchDiff = ball.spin.pitch - idealPitch;
+    // 2D slip velocity of bottom contact point relative to cloth: v_slip = v - rollVel
+    const slipVel = ball.velocity.sub(ball.rollVel);
+    const slipMag = slipVel.length();
 
-    // Check if sliding vs rolling
-    if (Math.abs(pitchDiff) > 0.05) {
-      // Sliding phase
-      // Friction force magnitude Fs = mu_s * m * g
-      // Linear acceleration magnitude = mu_s * g
-      const accelMag = this.SLIDING_FRICTION * this.GRAVITY; // ~2158 mm/s^2
-      
-      // Torque response: I = 2/5 m R^2 -> angular acceleration = 5/2 * (mu_s * g) / R
-      const angularAccel = (2.5 * accelMag) / R;
+    if (slipMag > 2.0) {
+      // ── SLIDING PHASE ──────────────────────────────────────────────────────
+      const accelLin = muS * this.GRAVITY;
+      const accelRoll = 2.5 * accelLin;
+      const totalClosureRate = (accelLin + accelRoll) * dt; // 3.5 * mu_s * g * dt
 
-      if (pitchDiff < 0) {
-        // Backspin: linear speed decelerates faster, pitch increases toward rolling
-        const newSpeed = Math.max(0, speed - accelMag * dt);
-        if (dir) {
-          ball.velocity = dir.scale(newSpeed);
-        }
-        ball.spin.pitch += angularAccel * dt;
-        if (ball.spin.pitch > idealPitch) {
-          ball.spin.pitch = idealPitch;
-        }
+      if (totalClosureRate >= slipMag) {
+        // Conservation of angular momentum about contact point: v_final = (5/7)v + (2/7)rollVel
+        const exactPureRoll = ball.velocity.scale(5 / 7).add(ball.rollVel.scale(2 / 7));
+        ball.velocity = exactPureRoll;
+        ball.rollVel = exactPureRoll.clone();
       } else {
-        // Topspin / follow: linear speed increases slightly or sustains, pitch decreases
-        const newSpeed = speed + accelMag * dt * 0.4;
-        if (dir) {
-          ball.velocity = dir.scale(newSpeed);
-        }
-        ball.spin.pitch -= angularAccel * dt;
-        if (ball.spin.pitch < idealPitch) {
-          ball.spin.pitch = idealPitch;
-        }
+        const slipDir = slipVel.scale(1 / slipMag);
+        ball.velocity = ball.velocity.sub(slipDir.scale(accelLin * dt));
+        ball.rollVel = ball.rollVel.add(slipDir.scale(accelRoll * dt));
       }
     } else {
-      // Pure rolling phase
-      // Deceleration a_r = mu_r * g
-      const rollDecel = this.ROLLING_FRICTION * this.GRAVITY; // ~147 mm/s^2
+      // ── PURE ROLLING PHASE ─────────────────────────────────────────────────
+      ball.rollVel = ball.velocity.clone();
+      const speed = ball.velocity.length();
+      const rollDecel = muR * this.GRAVITY;
       const newSpeed = Math.max(0, speed - rollDecel * dt);
 
-      if (dir && newSpeed > 1.0) {
+      if (speed > 1e-6 && newSpeed > 1.0) {
+        const dir = ball.velocity.scale(1 / speed);
         ball.velocity = dir.scale(newSpeed);
-        ball.spin.pitch = newSpeed / R;
+        ball.rollVel = ball.velocity.clone();
       } else {
-        ball.stop();
+        ball.velocity = Vector2D.zero();
+        ball.rollVel = Vector2D.zero();
       }
     }
 
+    // Sync scalar pitch for telemetry and test compatibility
+    const currentSpeed = ball.velocity.length();
+    if (currentSpeed > 1e-3) {
+      const dir = ball.velocity.scale(1 / currentSpeed);
+      ball.spin.pitch = ball.rollVel.dot(dir) / R;
+    } else if (ball.rollVel.lengthSq() > 1) {
+      ball.spin.pitch = ball.rollVel.length() / R;
+    } else {
+      ball.spin.pitch = 0;
+    }
+
     // Dampen vertical axis side spin (yaw)
-    ball.spin.yaw *= Math.pow(this.SPIN_DECAY, dt * 120);
-    if (Math.abs(ball.spin.yaw) < 0.05) {
+    ball.spin.yaw *= Math.pow(spinDecay, dt * 120);
+    if (Math.abs(ball.spin.yaw) < 0.08) {
       ball.spin.yaw = 0;
+    }
+
+    if (ball.velocity.lengthSq() < 1.0 && ball.rollVel.lengthSq() < 1.0 && Math.abs(ball.spin.yaw) < 0.1) {
+      ball.stop();
     }
   }
 }

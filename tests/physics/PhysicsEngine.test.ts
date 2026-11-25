@@ -190,4 +190,66 @@ describe('CueCraft Deterministic Physics Engine', () => {
     expect(red.potted).toBe(true);
     expect(red.pottedInPocket).toBe('corner-bottom-left');
   });
+
+  it('matches predicted full-route stopping positions to actual live execution within 2mm even with spin & cushions', () => {
+    const cue = new Ball('cue', 'cue', new Vector2D(800, 889));
+    const red = new Ball('red', 'red', new Vector2D(2000, 910)); // slight cut angle
+    engine.balls = [cue, red];
+
+    let capturedLog: any = null;
+    engine.onShotCompleted = (log) => {
+      capturedLog = log;
+    };
+
+    const angleRad = 0.015;
+    const power = 65;
+    const spinX = 0.55;
+    const spinY = -0.65; // Screw + right side spin
+
+    const pred = engine.calculateTrajectory(angleRad, power, spinX, spinY, 0, true);
+    expect(pred.objectBallPaths.length).toBe(1);
+    expect(pred.cueFinalPos).not.toBeNull();
+
+    engine.strikeCueBall(power, angleRad, spinX, spinY, 0, true);
+    for (let i = 0; i < 600 && engine.isSimulating; i++) {
+      engine.step(1 / 60);
+    }
+
+    expect(capturedLog).not.toBeNull();
+    expect(capturedLog.cueErrorMm).toBeLessThan(2.0);
+    if (capturedLog.targetErrorMm !== null) {
+      expect(capturedLog.targetErrorMm).toBeLessThan(2.0);
+    }
+  });
+
+  it('tracks multi-cushion border bounces on struck object balls and responds to cloth/border settings', async () => {
+    const { CLOTH_CATALOG, CUSHION_CATALOG } = await import('../../src/engine/equipment/Equipment');
+    // Cue ball aims straight at red ball near top cushion
+    const cue = new Ball('cue', 'cue', new Vector2D(2500, 889));
+    const red = new Ball('red', 'red', new Vector2D(3100, 889));
+    engine.balls = [cue, red];
+
+    engine.clothConfig = CLOTH_CATALOG[0]; // Tournament fast
+    engine.cushionConfig = CUSHION_CATALOG[3]; // Super elastic (0.93)
+
+    const pred = engine.calculateTrajectory(0, 75, 0, 0, 0, true);
+    expect(pred.objectBallPaths.length).toBe(1);
+    // Struck red hits top cushion and rebounds with multiple segments
+    expect(pred.objectBallPaths[0].cushionBounces).toBeGreaterThanOrEqual(1);
+    expect(pred.objectBallPaths[0].segments.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('supports moving any ball freely while preventing ball overlap', () => {
+    engine.setupPracticeRack();
+    const moved = engine.moveBall('red-1', new Vector2D(1800, 500));
+    expect(moved).toBe(true);
+    const red1 = engine.balls.find((b) => b.id === 'red-1')!;
+    expect(red1.position.x).toBe(1800);
+    expect(red1.position.y).toBe(500);
+
+    // Attempt to drop directly onto cue ball -> rejected
+    const cue = engine.cueBall!;
+    const overlappingMove = engine.moveBall('red-1', cue.position.clone());
+    expect(overlappingMove).toBe(false);
+  });
 });

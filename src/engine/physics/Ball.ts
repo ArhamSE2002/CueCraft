@@ -34,9 +34,17 @@ export class Ball {
   public type: BallType;
   public position: Vector2D;
   public velocity: Vector2D;
-  
+
+  /**
+   * 2D rolling-equivalent surface velocity vector (mm/s).
+   * At pure roll, rollVel equals velocity.
+   * For topspin, rollVel > velocity in shot direction.
+   * For backspin (screw), rollVel points opposite to shot direction.
+   */
+  public rollVel: Vector2D;
+
   // Angular spin velocity (rad/s)
-  // pitch: Topspin (+) / Backspin (-) around lateral axis
+  // pitch: Signed rolling angular speed (topspin + / backspin -) synced with rollVel
   // yaw: Left (-) / Right (+) side-spin around vertical axis
   public spin: { pitch: number; yaw: number };
 
@@ -56,6 +64,7 @@ export class Ball {
     this.type = type;
     this.position = position;
     this.velocity = Vector2D.zero();
+    this.rollVel = Vector2D.zero();
     this.spin = { pitch: 0, yaw: 0 };
     this.rotation = { x: 0, y: 0, z: 0 };
     this.radius = SnookerTable.BALL_RADIUS;
@@ -70,6 +79,7 @@ export class Ball {
   isStationary(epsilon: number = 0.5): boolean {
     return (
       this.velocity.lengthSq() < epsilon * epsilon &&
+      this.rollVel.lengthSq() < epsilon * epsilon &&
       Math.abs(this.spin.pitch) < 0.1 &&
       Math.abs(this.spin.yaw) < 0.1
     );
@@ -77,6 +87,7 @@ export class Ball {
 
   stop(): void {
     this.velocity = Vector2D.zero();
+    this.rollVel = Vector2D.zero();
     this.spin = { pitch: 0, yaw: 0 };
     this.swerveForce = 0;
   }
@@ -86,15 +97,17 @@ export class Ball {
    */
   updateRotation(deltaPos: Vector2D, dt: number): void {
     const R = this.radius;
-    // Rolling on table plane: X corresponds to table length, Y corresponds to table width
-    this.rotation.z -= deltaPos.x / R;
-    this.rotation.x += deltaPos.y / R;
+    const effDeltaX = this.rollVel.lengthSq() > 1 ? this.rollVel.x * dt : deltaPos.x;
+    const effDeltaY = this.rollVel.lengthSq() > 1 ? this.rollVel.y * dt : deltaPos.y;
+    this.rotation.z -= effDeltaX / R;
+    this.rotation.x += effDeltaY / R;
     this.rotation.y += this.spin.yaw * dt;
   }
 
   clone(): Ball {
     const copy = new Ball(this.id, this.type, this.position.clone());
     copy.velocity = this.velocity.clone();
+    copy.rollVel = this.rollVel.clone();
     copy.spin = { ...this.spin };
     copy.rotation = { ...this.rotation };
     copy.swerveForce = this.swerveForce;

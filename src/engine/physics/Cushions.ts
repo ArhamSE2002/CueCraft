@@ -1,20 +1,26 @@
 import { Ball } from './Ball';
 import { Vector2D } from '../math/Vector2D';
 import { SnookerTable, type CushionSegment } from '../table/SnookerTable';
+import { CUSHION_CATALOG, type CushionSpec } from '../equipment/Equipment';
 
 export class Cushions {
   public static readonly RESTITUTION = 0.72; // Normal energy return
   public static readonly TANGENTIAL_FRICTION = 0.20; // Friction coefficient of rubber cushion
   public static readonly SIDE_SPIN_BITE = 1.8; // Angle adjustment factor from yaw
 
+  public static readonly DEFAULT_CUSHION: CushionSpec = CUSHION_CATALOG[1]; // club-rails
+
   /**
    * Resolves collision between a ball and a cushion segment.
-   * Modifies ball velocity and spin authentically.
+   * Modifies ball velocity and spin authentically (running side vs check side, plus border restitution).
    */
-  public static resolveCushionCollision(ball: Ball, cushion: CushionSegment): boolean {
+  public static resolveCushionCollision(
+    ball: Ball,
+    cushion: CushionSegment,
+    spec: CushionSpec = this.DEFAULT_CUSHION
+  ): boolean {
     if (ball.potted) return false;
 
-    // Find closest point on cushion segment to ball center
     const seg = cushion.end.sub(cushion.start);
     const segLenSq = seg.lengthSq();
     if (segLenSq < 1e-6) return false;
@@ -27,33 +33,27 @@ export class Cushions {
     const dist = distVec.length();
 
     if (dist >= ball.radius) {
-      return false; // No contact
+      return false;
     }
 
     const normal = cushion.normal;
     const tangent = normal.perpendicular();
 
-    // Push ball back outside the cushion rubber boundary
     const penetration = ball.radius - dist;
     ball.position = ball.position.add(normal.scale(penetration));
 
-    // Velocities relative to cushion normal & tangent
     const vNormal = ball.velocity.dot(normal);
     const vTangent = ball.velocity.dot(tangent);
 
-    // If ball is already moving away from cushion, skip impulse
     if (vNormal >= 0) {
       return false;
     }
 
-    // Normal velocity reverses with restitution
-    const newVNormal = -vNormal * this.RESTITUTION;
+    const newVNormal = -vNormal * spec.restitution;
 
-    // Side spin interaction (Running side vs Check side)
-    // Positive yaw creates positive tangential acceleration along tangent
-    const spinTangentialBoost = (ball.spin.yaw * ball.radius * 0.15) * this.SIDE_SPIN_BITE;
-    const frictionDecel = Math.abs(vTangent) * this.TANGENTIAL_FRICTION;
-    
+    const spinTangentialBoost = (ball.spin.yaw * ball.radius * 0.15) * spec.sideSpinBite;
+    const frictionDecel = Math.abs(vTangent) * spec.tangentialFriction;
+
     let newVTangent = vTangent;
     if (vTangent > 0) {
       newVTangent = Math.max(0, vTangent - frictionDecel) + spinTangentialBoost;
@@ -63,11 +63,14 @@ export class Cushions {
       newVTangent = spinTangentialBoost;
     }
 
-    // Cushion also reduces ball's side spin by biting into it
     ball.spin.yaw *= 0.55;
-
-    // Reconstruct new velocity vector
     ball.velocity = normal.scale(newVNormal).add(tangent.scale(newVTangent));
+
+    const rNormal = ball.rollVel.dot(normal);
+    const rTangent = ball.rollVel.dot(tangent);
+    if (rNormal < 0) {
+      ball.rollVel = normal.scale(-rNormal * spec.restitution * 0.85).add(tangent.scale(rTangent * 0.9));
+    }
 
     return true;
   }
@@ -94,13 +97,13 @@ export class Cushions {
 
   /**
    * Clamps balls to table boundaries to ensure zero tunneling.
-   * If a ball is near or entering a pocket mouth, boundary clamping is bypassed
-   * so the ball naturally drops into the pocket rather than bouncing off invisible walls.
    */
-  public static enforceTableBounds(ball: Ball): void {
+  public static enforceTableBounds(
+    ball: Ball,
+    spec: CushionSpec = this.DEFAULT_CUSHION
+  ): void {
     if (ball.potted) return;
 
-    // Do not clamp or bounce balls that are entering pocket drop mouths
     if (this.isNearPocket(ball.position, 95)) {
       return;
     }
@@ -115,24 +118,39 @@ export class Cushions {
     let posY = ball.position.y;
     let velX = ball.velocity.x;
     let velY = ball.velocity.y;
+    let rollX = ball.rollVel.x;
+    let rollY = ball.rollVel.y;
 
     if (posX < minX) {
       posX = minX;
-      if (velX < 0) velX = -velX * this.RESTITUTION;
+      if (velX < 0) {
+        velX = -velX * spec.restitution;
+        rollX = -rollX * spec.restitution;
+      }
     } else if (posX > maxX) {
       posX = maxX;
-      if (velX > 0) velX = -velX * this.RESTITUTION;
+      if (velX > 0) {
+        velX = -velX * spec.restitution;
+        rollX = -rollX * spec.restitution;
+      }
     }
 
     if (posY < minY) {
       posY = minY;
-      if (velY < 0) velY = -velY * this.RESTITUTION;
+      if (velY < 0) {
+        velY = -velY * spec.restitution;
+        rollY = -rollY * spec.restitution;
+      }
     } else if (posY > maxY) {
       posY = maxY;
-      if (velY > 0) velY = -velY * this.RESTITUTION;
+      if (velY > 0) {
+        velY = -velY * spec.restitution;
+        rollY = -rollY * spec.restitution;
+      }
     }
 
     ball.position = new Vector2D(posX, posY);
     ball.velocity = new Vector2D(velX, velY);
+    ball.rollVel = new Vector2D(rollX, rollY);
   }
 }

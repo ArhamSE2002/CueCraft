@@ -2,12 +2,24 @@ import { Vector2D } from '../../engine/math/Vector2D';
 import { SnookerTable } from '../../engine/table/SnookerTable';
 import { Ball } from '../../engine/physics/Ball';
 import type { TrajectoryPrediction } from '../../engine/physics/PhysicsEngine';
+import {
+  CLOTH_CATALOG,
+  CUE_CATALOG,
+  TIP_CATALOG,
+  type ClothSpec,
+  type CueSpec,
+  type CueTipSpec,
+} from '../../engine/equipment/Equipment';
 
 export interface RendererOptions {
   showTrajectories: boolean;
   showGhostBall: boolean;
   showAimLine: boolean;
   tableColor?: string;
+  clothSpec?: ClothSpec;
+  cueSpec?: CueSpec;
+  tipSpec?: CueTipSpec;
+  selectedMoveBallId?: string | null;
 }
 
 export class CanvasTableRenderer {
@@ -25,6 +37,10 @@ export class CanvasTableRenderer {
     showTrajectories: true,
     showGhostBall: true,
     showAimLine: true,
+    clothSpec: CLOTH_CATALOG[1],
+    cueSpec: CUE_CATALOG[0],
+    tipSpec: TIP_CATALOG[1],
+    selectedMoveBallId: null,
   };
 
   constructor(canvas: HTMLCanvasElement) {
@@ -118,12 +134,21 @@ export class CanvasTableRenderer {
     for (const ball of balls) {
       if (!ball.potted) {
         this.drawBall(ball);
+        if (this.options.selectedMoveBallId === ball.id) {
+          const p = this.toScreen(ball.position);
+          const r = ball.radius * this.scale;
+          ctx.strokeStyle = '#2DD4BF';
+          ctx.lineWidth = 2.5 * this.scale;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, r * 1.4, 0, Math.PI * 2);
+          ctx.stroke();
+        }
       }
     }
 
     // 6. Draw Interactive Cue Stick
     const cueBall = balls.find((b) => b.type === 'cue' && !b.potted);
-    if (cueBall && isAiming && aimAngleRad !== undefined) {
+    if (cueBall && isAiming && aimAngleRad !== undefined && !this.options.selectedMoveBallId) {
       this.drawCueStick(cueBall, aimAngleRad, cuePowerPercent);
     }
   }
@@ -169,7 +194,7 @@ export class CanvasTableRenderer {
     const w = SnookerTable.LENGTH * this.scale;
     const h = SnookerTable.WIDTH * this.scale;
 
-    // Authentic Strachan No. 10 cloth baize with subtle canopy overhead spotlight
+    const clothBase = this.options.clothSpec?.feltHex2D ?? '#0B2B1E';
     const baizeGrad = ctx.createRadialGradient(
       x + w * 0.5,
       y + h * 0.5,
@@ -178,9 +203,9 @@ export class CanvasTableRenderer {
       y + h * 0.5,
       w * 0.7
     );
-    baizeGrad.addColorStop(0, '#11442B');
-    baizeGrad.addColorStop(0.7, '#0B2B1E');
-    baizeGrad.addColorStop(1, '#071F15');
+    baizeGrad.addColorStop(0, clothBase);
+    baizeGrad.addColorStop(0.75, clothBase);
+    baizeGrad.addColorStop(1, '#061A11');
 
     ctx.fillStyle = baizeGrad;
     ctx.fillRect(x, y, w, h);
@@ -305,27 +330,82 @@ export class CanvasTableRenderer {
       ctx.fill();
     }
 
-    // 3. Target Ball Projected Path
-    for (const segment of prediction.targetPath) {
-      const s = this.toScreen(segment.start);
-      const e = this.toScreen(segment.end);
+    // 3. ALL Object Ball Projected Paths (including post-border cushion rebounds & secondary balls!)
+    const objPaths = prediction.objectBallPaths ?? [];
+    if (objPaths.length > 0) {
+      objPaths.forEach((obj, objIdx) => {
+        const strokeHex = objIdx === 0 ? '#EF4444' : '#F59E0B';
+        const segs = obj.segments;
+        segs.forEach((segment, segIdx) => {
+          const s = this.toScreen(segment.start);
+          const e = this.toScreen(segment.end);
+          const bounce = segment.bounce ?? 0;
+          const alpha = Math.max(0.3, Math.pow(0.72, bounce));
 
-      ctx.strokeStyle = '#EF4444';
-      ctx.lineWidth = 2 * this.scale;
-      ctx.beginPath();
-      ctx.moveTo(s.x, s.y);
-      ctx.lineTo(e.x, e.y);
-      ctx.stroke();
+          ctx.save();
+          ctx.globalAlpha = alpha;
+          ctx.strokeStyle = strokeHex;
+          ctx.lineWidth = 2 * this.scale;
+          if (bounce > 0) {
+            ctx.setLineDash([5 * this.scale, 3 * this.scale]);
+          }
+          ctx.beginPath();
+          ctx.moveTo(s.x, s.y);
+          ctx.lineTo(e.x, e.y);
+          ctx.stroke();
+          ctx.setLineDash([]);
 
-      this.drawArrowHead(s, e, '#EF4444');
+          if (bounce > 0) {
+            ctx.fillStyle = strokeHex;
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, 2.8 * this.scale, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          if (segIdx === segs.length - 1) {
+            this.drawArrowHead(s, e, strokeHex);
+          }
+          ctx.restore();
+        });
+
+        // Draw target resting marker or POT badge
+        const endScreen = this.toScreen(obj.endPos);
+        const r = SnookerTable.BALL_RADIUS * this.scale;
+        ctx.save();
+        ctx.strokeStyle = strokeHex;
+        ctx.lineWidth = 1.4 * this.scale;
+        ctx.setLineDash([2.5 * this.scale, 2.5 * this.scale]);
+        ctx.beginPath();
+        ctx.arc(endScreen.x, endScreen.y, r * 0.9, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      });
+    } else {
+      for (const segment of prediction.targetPath) {
+        const s = this.toScreen(segment.start);
+        const e = this.toScreen(segment.end);
+
+        ctx.strokeStyle = '#EF4444';
+        ctx.lineWidth = 2 * this.scale;
+        ctx.beginPath();
+        ctx.moveTo(s.x, s.y);
+        ctx.lineTo(e.x, e.y);
+        ctx.stroke();
+
+        this.drawArrowHead(s, e, '#EF4444');
+      }
     }
 
-    // 4. Cue Ball Deflection Path (Tangent line)
+    // 4. Cue Ball Post-Impact Deflection Path (Multi-cushion curved/rebound path)
     for (const segment of prediction.cueDeflectionPath) {
       const s = this.toScreen(segment.start);
       const e = this.toScreen(segment.end);
+      const bounce = segment.bounce ?? 0;
+      const alpha = Math.max(0.3, Math.pow(0.72, bounce));
 
-      ctx.strokeStyle = '#38BDF8';
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = bounce > 0 ? '#60A5FA' : '#38BDF8';
       ctx.lineWidth = 1.8 * this.scale;
       ctx.setLineDash([3 * this.scale, 3 * this.scale]);
       ctx.beginPath();
@@ -333,6 +413,27 @@ export class CanvasTableRenderer {
       ctx.lineTo(e.x, e.y);
       ctx.stroke();
       ctx.setLineDash([]);
+      if (bounce > 0) {
+        ctx.fillStyle = '#38BDF8';
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, 2.5 * this.scale, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    // 5. Predicted Cue Final Resting Position Ring (when fullRoute is active)
+    if (prediction.fullRoute && prediction.cueFinalPos) {
+      const fp = this.toScreen(prediction.cueFinalPos);
+      const r = SnookerTable.BALL_RADIUS * this.scale;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(247, 245, 238, 0.55)';
+      ctx.lineWidth = 1.4 * this.scale;
+      ctx.setLineDash([2.5 * this.scale, 2.5 * this.scale]);
+      ctx.beginPath();
+      ctx.arc(fp.x, fp.y, r * 0.95, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
     }
   }
 
@@ -409,15 +510,15 @@ export class CanvasTableRenderer {
     ctx.closePath();
 
     const cueGrad = ctx.createLinearGradient(tipX, tipY, buttX, buttY);
-    cueGrad.addColorStop(0, '#E6D3AC');
-    cueGrad.addColorStop(0.3, '#C49E65');
-    cueGrad.addColorStop(0.75, '#522E14');
+    cueGrad.addColorStop(0, this.options.cueSpec?.shaftColor ?? '#E6D3AC');
+    cueGrad.addColorStop(0.38, this.options.cueSpec?.shaftColor ?? '#C49E65');
+    cueGrad.addColorStop(0.72, this.options.cueSpec?.buttColor ?? '#522E14');
     cueGrad.addColorStop(1, '#1A0E06');
 
     ctx.fillStyle = cueGrad;
     ctx.fill();
 
-    // Brass ferrule & blue chalk tip
+    // Brass ferrule & chalk tip (dynamic tip color)
     ctx.strokeStyle = '#C5A059';
     ctx.lineWidth = 3 * this.scale;
     ctx.beginPath();
@@ -425,7 +526,7 @@ export class CanvasTableRenderer {
     ctx.lineTo(tipX - normal.x * (tipWidth / 2), tipY - normal.y * (tipWidth / 2));
     ctx.stroke();
 
-    ctx.strokeStyle = '#2563EB';
+    ctx.strokeStyle = this.options.tipSpec?.colorHex ?? '#2563EB';
     ctx.lineWidth = 2 * this.scale;
     const chalkX = tipX - Math.cos(backAngle) * (2 * this.scale);
     const chalkY = tipY - Math.sin(backAngle) * (2 * this.scale);

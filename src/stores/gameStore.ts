@@ -1,28 +1,47 @@
 import { create } from 'zustand';
 import { Ball } from '../engine/physics/Ball';
+import type { ShotTelemetryLog } from '../engine/physics/PhysicsEngine';
+import { TIP_CATALOG } from '../engine/equipment/Equipment';
 
 export type RenderMode = '2d' | '3d';
 export type GameMode = 'practice' | 'championship' | 'lesson';
+export type InteractionMode = 'aim' | 'move';
+export type CameraViewMode = 'tactical' | 'target' | 'side' | 'overhead' | 'orbit';
+export type CameraFollowMode = 'stiff' | 'follow';
 
 export interface GameState {
   renderMode: RenderMode;
   gameMode: GameMode;
+  interactionMode: InteractionMode;
+  threeCameraMode: CameraViewMode;
+  cameraFollowMode: CameraFollowMode;
   aimAngleRad: number;
   power: number; // 2 to 100
-  spinX: number; // -1 to 1 (horizontal tip offset: left/right english)
-  spinY: number; // -1 to 1 (vertical tip offset: negative = screw/backspin, positive = follow/topspin)
-  cueElevationDeg: number; // 0° to 70° (cue butt elevation for swerve / masse shots)
-  zoomLevel: number; // 0.75 to 2.5
+  spinX: number; // -0.9 to 0.9
+  spinY: number; // -0.9 to 0.9
+  cueElevationDeg: number; // 0° to 85°
+  zoomLevel: number; // 0.65 to 3.0
   panOffset: { x: number; y: number };
   showTrajectories: boolean;
   showFullRoute: boolean;
   showGhostBall: boolean;
-  aimSensitivity: number; // in degrees: 0.05, 0.1, 0.5, 2.0
+  aimSensitivity: number; // 0.05, 0.1, 0.5, 2.0
   tacticalElevation: 'low' | 'med' | 'high';
   isSimulating: boolean;
   score: number;
   pottedBalls: Ball[];
   foulNotice: string | null;
+
+  // Equipment & Table customization IDs
+  cueId: string;
+  tipId: string;
+  clothId: string;
+  cushionId: string;
+
+  // Active lesson/scenario & verification logs
+  activeScenarioId: string | null;
+  shotLogs: ShotTelemetryLog[];
+
   telemetry: {
     cutAngle: number;
     cueSpeedKmh: number;
@@ -32,6 +51,9 @@ export interface GameState {
   // Actions
   setRenderMode: (mode: RenderMode) => void;
   setGameMode: (mode: GameMode) => void;
+  setInteractionMode: (mode: InteractionMode) => void;
+  setThreeCameraMode: (cam: CameraViewMode) => void;
+  setCameraFollowMode: (follow: CameraFollowMode) => void;
   setAimAngleRad: (angle: number) => void;
   adjustAimAngleRad: (delta: number) => void;
   setPower: (power: number) => void;
@@ -47,6 +69,13 @@ export interface GameState {
   toggleGhostBall: () => void;
   setAimSensitivity: (sens: number) => void;
   setTacticalElevation: (elevation: 'low' | 'med' | 'high') => void;
+  setCueId: (id: string) => void;
+  setTipId: (id: string) => void;
+  setClothId: (id: string) => void;
+  setCushionId: (id: string) => void;
+  setActiveScenarioId: (id: string | null) => void;
+  addShotLog: (log: ShotTelemetryLog) => void;
+  clearShotLogs: () => void;
   setIsSimulating: (sim: boolean) => void;
   addScore: (pts: number) => void;
   deductScore: (pts: number) => void;
@@ -58,6 +87,9 @@ export interface GameState {
 export const useGameStore = create<GameState>((set) => ({
   renderMode: '2d',
   gameMode: 'practice',
+  interactionMode: 'aim',
+  threeCameraMode: 'tactical',
+  cameraFollowMode: 'stiff',
   aimAngleRad: 0,
   power: 35,
   spinX: 0,
@@ -68,12 +100,21 @@ export const useGameStore = create<GameState>((set) => ({
   showTrajectories: true,
   showFullRoute: true,
   showGhostBall: true,
-  aimSensitivity: 0.1, // 0.1 degree default fine sensitivity
+  aimSensitivity: 0.1,
   tacticalElevation: 'med',
   isSimulating: false,
   score: 0,
   pottedBalls: [],
   foulNotice: null,
+
+  cueId: 'ash-classic',
+  tipId: 'medium-pro',
+  clothId: 'club-standard',
+  cushionId: 'club-rails',
+
+  activeScenarioId: null,
+  shotLogs: [],
+
   telemetry: {
     cutAngle: 0,
     cueSpeedKmh: 14.5,
@@ -82,17 +123,24 @@ export const useGameStore = create<GameState>((set) => ({
 
   setRenderMode: (renderMode) => set({ renderMode }),
   setGameMode: (gameMode) => set({ gameMode }),
+  setInteractionMode: (interactionMode) => set({ interactionMode }),
+  setThreeCameraMode: (threeCameraMode) => set({ threeCameraMode }),
+  setCameraFollowMode: (cameraFollowMode) => set({ cameraFollowMode }),
   setAimAngleRad: (aimAngleRad) => set({ aimAngleRad }),
   adjustAimAngleRad: (delta) =>
     set((state) => ({ aimAngleRad: state.aimAngleRad + delta })),
   setPower: (power) => set({ power: Math.max(2, Math.min(100, power)) }),
   setSpin: (spinX, spinY) =>
-    set({
-      spinX: Math.max(-0.85, Math.min(0.85, spinX)),
-      spinY: Math.max(-0.85, Math.min(0.85, spinY)),
+    set((state) => {
+      const tip = TIP_CATALOG.find((t) => t.id === state.tipId) ?? TIP_CATALOG[1];
+      const maxR = tip.maxSpinOffset;
+      return {
+        spinX: Math.max(-maxR, Math.min(maxR, spinX)),
+        spinY: Math.max(-maxR, Math.min(maxR, spinY)),
+      };
     }),
   setCueElevationDeg: (deg) =>
-    set({ cueElevationDeg: Math.max(0, Math.min(75, deg)) }),
+    set({ cueElevationDeg: Math.max(0, Math.min(85, deg)) }),
   setZoomLevel: (zoomLevel) =>
     set({ zoomLevel: Math.max(0.65, Math.min(3.0, zoomLevel)) }),
   zoomIn: () =>
@@ -109,6 +157,14 @@ export const useGameStore = create<GameState>((set) => ({
     set((state) => ({ showGhostBall: !state.showGhostBall })),
   setAimSensitivity: (aimSensitivity) => set({ aimSensitivity }),
   setTacticalElevation: (tacticalElevation) => set({ tacticalElevation }),
+  setCueId: (cueId) => set({ cueId }),
+  setTipId: (tipId) => set({ tipId }),
+  setClothId: (clothId) => set({ clothId }),
+  setCushionId: (cushionId) => set({ cushionId }),
+  setActiveScenarioId: (activeScenarioId) => set({ activeScenarioId }),
+  addShotLog: (log) =>
+    set((state) => ({ shotLogs: [log, ...state.shotLogs].slice(0, 20) })),
+  clearShotLogs: () => set({ shotLogs: [] }),
   setIsSimulating: (isSimulating) => set({ isSimulating }),
   addScore: (pts) => set((state) => ({ score: state.score + pts })),
   deductScore: (pts) => set((state) => ({ score: Math.max(0, state.score - pts) })),
