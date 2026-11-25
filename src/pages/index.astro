@@ -5,43 +5,43 @@ import { InteractiveHeroDemo } from '../components/landing/InteractiveHeroDemo';
 const curriculumRows = [
   {
     title: 'Dead-Stop Stun & Momentum Transfer',
-    topic: 'Kinematics',
-    metric: 'v_normal = 0 · 90° Tangent',
+    formula: 'v_normal = 0 · 90° Separation',
+    summary: 'Eliminate roll before contact so linear energy transfers straight into the object ball.',
     learnHref: '/learn/cue-ball-control',
     playHref: '/play?scenario=cue-ball-control',
   },
   {
     title: 'Screw-Back Draw & Topspin Follow',
-    topic: '2D Slip Vector',
-    metric: 'F_slip = −μs mg (v − u_roll)',
+    formula: 'F_slip = −μs mg (v − u_roll)',
+    summary: '2D surface slip physics generates parabolic draw and follow arcs at any cut angle.',
     learnHref: '/learn/topspin-and-backspin',
     playHref: '/play?scenario=topspin-and-backspin',
   },
   {
     title: 'Running Side, Check Side & Elevated Swerve',
-    topic: 'Rotational English',
-    metric: 'e_yaw · Cue Squirt + Curve',
+    formula: 'e_yaw · Squirt + Curve',
+    summary: 'Control cue squirt, cushion bite angle widening, and steep-butt masse curvature.',
     learnHref: '/learn/side-spin-ballistics',
     playHref: '/play?scenario=side-spin-ballistics',
   },
   {
     title: 'Multi-Cushion Escapes & Border Strength',
-    topic: 'Rebound Restitution',
-    metric: 'e_c = 0.56 – 0.93',
+    formula: 'Restitution e = 0.56 – 0.93',
+    summary: 'Calculate two- and three-rail safety rebounds adjusted for rubber border elasticity.',
     learnHref: '/learn/cushion-rebounds',
     playHref: '/play?scenario=cushion-rebounds',
   },
   {
-    title: 'Cut-Induced Throw & Collision Geometry',
-    topic: 'Line of Centers',
-    metric: '2R = 52.5 mm Ghost Contact',
+    title: 'Cut-Induced Throw & Ghost Contact',
+    formula: '2R = 52.5 mm Contact Axis',
+    summary: 'Line-of-centers geometry paired with tangential throw friction across cut angles.',
     learnHref: '/learn/collision-angles',
     playHref: '/play?scenario=collision-angles',
   },
   {
-    title: 'Stopping Distance & Cloth Friction Regimes',
-    topic: 'Rolling Resistance',
-    metric: 'μr = 0.022 – 0.056',
+    title: 'Pace Control & Cloth Nap Resistance',
+    formula: 'd = v² / (2 μr g)',
+    summary: 'Compare stopping distances across Crucible Worsted, Club Baize, and Heavy Nap wool.',
     learnHref: '/learn/speed-and-distance',
     playHref: '/play?scenario=speed-and-distance',
   },
@@ -53,148 +53,232 @@ const curriculumRows = [
   description="Learn snooker kinematics, spin ballistics, and cushion geometry with CueCraft's deterministic 2D/3D simulator and interactive lecture drills."
 >
   {/* ════════════════════════════════════════════════════════════════════════
-      HERO: ASYMMETRIC EDITORIAL SPLIT + LIVE RIGID-BODY SIMULATION
+      SECTION 1: CANOPY ARENA HERO (ASYMMETRIC STAGE + LIVE TABLE SIMULATOR)
   ════════════════════════════════════════════════════════════════════════ */}
-  <section class="relative border-b border-surface-subtle bg-surface-base overflow-hidden">
-    {/* Subtle technical drafting lines */}
-    <svg
-      class="absolute inset-0 w-full h-full opacity-[0.045] pointer-events-none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <defs>
-        <pattern id="draft-grid" width="64" height="64" patternUnits="userSpaceOnUse">
-          <path d="M 64 0 L 0 0 0 64" fill="none" stroke="#C5A059" stroke-width="0.75" />
-        </pattern>
-      </defs>
-      <rect width="100%" height="100%" fill="url(#draft-grid)" />
-    </svg>
+  <section class="relative overflow-hidden border-b border-surface-subtle bg-surface-base">
+    {/* Crucible overhead spotlight gradient pool */}
+    <div
+      class="absolute -top-32 left-1/2 -translate-x-1/2 w-[1100px] h-[520px] rounded-full pointer-events-none opacity-80"
+      style="background: radial-gradient(ellipse at center, rgba(17,87,57,0.42) 0%, rgba(11,59,38,0.18) 45%, transparent 72%);"
+    />
+    <div
+      class="absolute top-12 right-[12%] w-[420px] h-[420px] rounded-full pointer-events-none opacity-40"
+      style="background: radial-gradient(circle, rgba(226,184,87,0.16) 0%, transparent 65%);"
+    />
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 py-12 lg:py-20 relative z-10">
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center">
-        {/* Left Column: Editorial Headline & Direct Entry */}
-        <div class="lg:col-span-5 hero-reveal">
-          <h1 class="font-serif text-4xl sm:text-5xl xl:text-6xl font-bold tracking-tight text-ivory-text leading-[1.06] mb-6">
-            Master Snooker From First Principles
+        {/* Left: Editorial Copy & Bold High-Contrast Actions */}
+        <div class="lg:col-span-5 hero-enter">
+          <div class="inline-flex items-center gap-2.5 text-xs font-mono text-brass-primary mb-5">
+            <span class="w-6 h-[1.5px] bg-brass-primary" />
+            <span>Crucible Physics Lab · 2D &amp; 3D Engine</span>
+          </div>
+
+          <h1 class="font-serif text-4xl sm:text-5xl xl:text-[3.65rem] font-bold tracking-tight text-ivory-text leading-[1.05] mb-6">
+            Decode Every Angle on the Baize
           </h1>
 
           <p class="text-sm sm:text-base text-ivory-muted leading-relaxed mb-8 max-w-lg">
-            CueCraft is an interactive snooker learning lab and playable 2D/3D table simulator. Experiment with millimeter tip offsets, spin curves, cloth speeds, cushion bounce strength, and exact forward-simulated ball trajectories.
+            Practice championship snooker inside a deterministic physics laboratory. Dial in millimeter tip spin, compare cue shafts and cloth speeds, trace full multi-cushion ball routes, and execute shots in synced 2D or 3D.
           </p>
 
-          <div class="flex flex-wrap items-center gap-3 mb-10">
+          <div class="flex flex-wrap items-center gap-3.5 mb-10">
             <a
               href="/play"
-              class="px-6 py-3.5 rounded-lg bg-brass-primary hover:bg-brass-hover text-surface-base font-bold text-xs tracking-wider uppercase transition-colors shadow-brass-glow"
+              class="px-7 py-3.5 rounded-lg bg-brass-primary hover:bg-brass-hover text-surface-base font-bold text-xs tracking-wider uppercase transition-colors shadow-brass-glow"
             >
-              Launch 2D Simulator
+              Launch Simulator
             </a>
             <a
               href="/play?mode=3d"
-              class="px-6 py-3.5 rounded-lg bg-felt-surface hover:bg-felt-accent text-ivory-text border border-felt-border font-semibold text-xs tracking-wider uppercase transition-colors"
+              class="px-6 py-3.5 rounded-lg bg-felt-surface hover:bg-felt-accent text-ivory-text border border-brass-primary/45 font-semibold text-xs tracking-wider uppercase transition-colors"
             >
-              Enter 3D Table View
+              Enter 3D Arena
             </a>
             <a
               href="/lessons"
-              class="px-4 py-3.5 text-xs font-medium text-ivory-muted hover:text-brass-primary transition-colors underline underline-offset-4"
+              class="px-3 py-3 text-xs font-semibold text-chalk-cyan hover:text-brass-primary transition-colors underline underline-offset-4"
             >
-              Browse Guided Drills
+              Guided Drills
             </a>
           </div>
 
-          {/* Concise Technical Ledger */}
-          <dl class="grid grid-cols-3 gap-4 pt-6 border-t border-surface-subtle text-xs">
+          {/* Crisp Broadcast Telemetry Strip */}
+          <div class="grid grid-cols-3 gap-4 pt-6 border-t border-surface-subtle/80">
             <div>
-              <dt class="text-ivory-faint font-sans">Table Dimensions</dt>
-              <dd class="font-mono text-ivory-text font-semibold mt-0.5">3569 × 1778 mm</dd>
+              <div class="font-mono text-lg sm:text-xl font-bold text-brass-primary">240 Hz</div>
+              <div class="text-[11px] text-ivory-faint">Rigid-Body Substeps</div>
             </div>
             <div>
-              <dt class="text-ivory-faint font-sans">Physics Integrator</dt>
-              <dd class="font-mono text-ivory-text font-semibold mt-0.5">240 Hz Substep</dd>
+              <div class="font-mono text-lg sm:text-xl font-bold text-chalk-cyan">1 : 1</div>
+              <div class="text-[11px] text-ivory-faint">Ghost-Sim Route Trace</div>
             </div>
             <div>
-              <dt class="text-ivory-faint font-sans">Prediction Mode</dt>
-              <dd class="font-mono text-chalk-cyan font-semibold mt-0.5">1:1 Ghost Sim</dd>
+              <div class="font-mono text-lg sm:text-xl font-bold text-ivory-text">0.05°</div>
+              <div class="text-[11px] text-ivory-faint">Aim Step Resolution</div>
             </div>
-          </dl>
+          </div>
         </div>
 
-        {/* Right Column: Live Interactive Canvas */}
-        <div class="lg:col-span-7 hero-reveal-delayed">
-          <InteractiveHeroDemo client:load />
+        {/* Right: Mahogany & Burnished-Gold Framed Live Physics Stage */}
+        <div class="lg:col-span-7 hero-enter-delay">
+          <div class="rounded-2xl p-3 sm:p-4 bg-gradient-to-br from-[#3B1B0C] via-[#221006] to-[#140A04] border border-brass-primary/45 shadow-cushion relative">
+            {/* Corner Brass Plates */}
+            <span class="absolute top-1.5 left-1.5 w-3 h-3 rounded-tl-md border-t-2 border-l-2 border-brass-primary pointer-events-none" />
+            <span class="absolute top-1.5 right-1.5 w-3 h-3 rounded-tr-md border-t-2 border-r-2 border-brass-primary pointer-events-none" />
+            <span class="absolute bottom-1.5 left-1.5 w-3 h-3 rounded-bl-md border-b-2 border-l-2 border-brass-primary pointer-events-none" />
+            <span class="absolute bottom-1.5 right-1.5 w-3 h-3 rounded-br-md border-b-2 border-r-2 border-brass-primary pointer-events-none" />
+
+            <div class="rounded-xl bg-surface-base/95 p-3 sm:p-4 border border-brass-primary/20">
+              <InteractiveHeroDemo client:load />
+            </div>
+          </div>
         </div>
       </div>
     </div>
   </section>
 
   {/* ════════════════════════════════════════════════════════════════════════
-      SECTION 2: TWO LENSES — SHARED DETERMINISTIC ENGINE
+      SECTION 2: VISUAL DUAL-ENGINE SHOWCASE (RICH CUSTOM ILLUSTRATIONS)
   ════════════════════════════════════════════════════════════════════════ */}
-  <section class="border-b border-surface-subtle bg-surface-card/35">
+  <section class="border-b border-surface-subtle bg-gradient-to-b from-surface-card/70 to-surface-base">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 py-16 lg:py-24">
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
-        {/* Left: 2D Analytical Geometry */}
-        <div class="lg:col-span-6 lg:pr-10 lg:border-r border-surface-subtle">
-          <h2 class="font-serif text-2xl sm:text-3xl font-bold text-ivory-text mb-3">
-            2D Ballistics &amp; Full-Route Trace
-          </h2>
-          <p class="text-sm text-ivory-muted leading-relaxed mb-6 max-w-xl">
-            Every shot preview runs the identical fixed-timestep rigid-body equations used during live execution. Before you strike, see exactly how far the cue ball travels, how screw and follow curve after impact, and where every struck object ball rebounds off the borders.
-          </p>
+      <div class="max-w-2xl mb-12">
+        <h2 class="font-serif text-3xl sm:text-4xl font-bold text-ivory-text mb-3">
+          Switch Instantly Between Precision Geometry &amp; 3D Immersion
+        </h2>
+        <p class="text-sm text-ivory-muted leading-relaxed">
+          One deterministic physics core drives both views. Analyze exact post-border trajectories top-down, then flip to 3D with five synchronized camera views and independent camera/aim control.
+        </p>
+      </div>
 
-          {/* Clean geometric SVG schematic */}
-          <div class="rounded-xl bg-felt-darkest border border-felt-border p-5 shadow-felt-inset">
-            <svg viewBox="0 0 560 220" class="w-full h-auto" aria-label="2D Ghost Ball and Screw Trajectory Diagram">
-              {/* Baulk line */}
-              <line x1="90" y1="12" x2="90" y2="208" stroke="rgba(245,242,235,0.28)" stroke-width="1.5" />
-              <path d="M 90 60 A 50 50 0 0 0 90 160" fill="none" stroke="rgba(245,242,235,0.28)" stroke-width="1.5" />
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* 2D Analytical Showcase */}
+        <div class="rounded-2xl bg-surface-card border border-surface-subtle overflow-hidden flex flex-col">
+          <div class="bg-felt-darkest border-b border-surface-subtle p-6 relative">
+            <svg viewBox="0 0 600 260" class="w-full h-auto rounded-lg shadow-felt-inset" aria-label="2D Full-Route Ballistics Diagram">
+              <defs>
+                <radialGradient id="baize-spot" cx="50%" cy="50%" r="65%">
+                  <stop offset="0%" stop-color="#14633F" />
+                  <stop offset="100%" stop-color="#052315" />
+                </radialGradient>
+              </defs>
+              {/* Mahogany border + emerald felt */}
+              <rect x="6" y="6" width="588" height="248" rx="14" fill="#3D1C0B" stroke="#E2B857" stroke-width="2" />
+              <rect x="24" y="24" width="552" height="212" fill="url(#baize-spot)" />
+              {/* Baulk & D */}
+              <line x1="125" y1="24" x2="125" y2="236" stroke="rgba(250,247,240,0.4)" stroke-width="1.5" />
+              <path d="M 125 82 A 48 48 0 0 0 125 178" fill="none" stroke="rgba(250,247,240,0.4)" stroke-width="1.5" />
+              {/* Pockets */}
+              <circle cx="24" cy="24" r="11" fill="#05070A" stroke="#E2B857" stroke-width="2" />
+              <circle cx="300" cy="22" r="10" fill="#05070A" stroke="#E2B857" stroke-width="2" />
+              <circle cx="576" cy="24" r="11" fill="#05070A" stroke="#E2B857" stroke-width="2" />
+              <circle cx="24" cy="236" r="11" fill="#05070A" stroke="#E2B857" stroke-width="2" />
+              <circle cx="300" cy="238" r="10" fill="#05070A" stroke="#E2B857" stroke-width="2" />
+              <circle cx="576" cy="236" r="11" fill="#05070A" stroke="#E2B857" stroke-width="2" />
 
-              {/* Cue path */}
-              <line x1="120" y1="130" x2="292" y2="110" stroke="#F7F5EE" stroke-width="2" stroke-dasharray="6 4" />
-              {/* Post-impact screw curve */}
-              <path d="M 292 110 Q 250 140 190 165" fill="none" stroke="#38BDF8" stroke-width="2" stroke-dasharray="4 3" />
-              {/* Object ball path + cushion bounce */}
-              <polyline points="324,102 455,22 520,115" fill="none" stroke="#EF4444" stroke-width="2.2" />
+              {/* High-visibility cue path + ghost ball + screw curve + red multi-bounce */}
+              <line x1="150" y1="145" x2="352" y2="112" stroke="#FAF7F0" stroke-width="3.2" stroke-dasharray="10 5" />
+              <path d="M 352 112 Q 305 162 245 198" fill="none" stroke="#38BDF8" stroke-width="3" stroke-dasharray="6 4" />
+              <polyline points="384,105 510,38 564,135" fill="none" stroke="#FF5757" stroke-width="3.2" />
+              <circle cx="510" cy="38" r="4" fill="#FF5757" />
 
               {/* Balls */}
-              <circle cx="120" cy="130" r="14" fill="#F7F5EE" />
-              <circle cx="292" cy="110" r="14" fill="rgba(45,212,191,0.18)" stroke="#2DD4BF" stroke-width="1.8" />
-              <circle cx="324" cy="102" r="14" fill="#DC2626" />
+              <circle cx="150" cy="145" r="14" fill="#FAF7F0" />
+              <circle cx="145" cy="140" r="4" fill="#FFFFFF" />
+              <circle cx="352" cy="112" r="14" fill="rgba(45,212,191,0.2)" stroke="#2DD4BF" stroke-width="2.5" />
+              <circle cx="352" cy="112" r="2.5" fill="#2DD4BF" />
+              <circle cx="384" cy="105" r="14" fill="#E11D48" />
+              <circle cx="379" cy="100" r="4" fill="#FDA4AF" />
 
-              {/* Annotations */}
-              <text x="108" y="164" fill="#C8CFDA" font-family="monospace" font-size="10">Cue Ball (-0.75Y Screw)</text>
-              <text x="242" y="84" fill="#2DD4BF" font-family="monospace" font-size="10">Ghost Contact (2R)</text>
-              <text x="366" y="42" fill="#EF4444" font-family="monospace" font-size="10">Target Cushion Reflection</text>
-              <text x="155" y="182" fill="#38BDF8" font-family="monospace" font-size="10">Parabolic Draw Curve</text>
+              {/* Cue Stick */}
+              <line x1="48" y1="162" x2="128" y2="149" stroke="#E2B857" stroke-width="5.5" stroke-linecap="round" />
+              <line x1="124" y1="149.5" x2="130" y2="148.5" stroke="#2563EB" stroke-width="5" stroke-linecap="round" />
             </svg>
+          </div>
+
+          <div class="p-6 sm:p-7 flex-1 flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <h3 class="font-serif text-xl font-bold text-ivory-text">
+                  2D Ballistics &amp; Full-Route Overlay
+                </h3>
+                <span class="font-mono text-[11px] text-chalk-cyan">Retina Canvas</span>
+              </div>
+              <p class="text-xs sm:text-sm text-ivory-muted leading-relaxed">
+                High-contrast aim vectors, ghost-ball contact reticles, screw/follow curves, and complete post-collision routes for every object ball—verified against live execution with millimeter telemetry logs.
+              </p>
+            </div>
+            <div class="mt-5 pt-4 border-t border-surface-subtle flex items-center justify-between text-xs font-mono">
+              <span class="text-ivory-faint">Zoom 65%–300% · Free Ball Drag (M)</span>
+              <a href="/play" class="text-brass-primary hover:text-brass-hover font-bold">Open 2D View &rarr;</a>
+            </div>
           </div>
         </div>
 
-        {/* Right: 3D Multi-Camera Simulation */}
-        <div class="lg:col-span-6">
-          <h2 class="font-serif text-2xl sm:text-3xl font-bold text-ivory-text mb-3">
-            3D Room Immersion &amp; Multi-Angle Cameras
-          </h2>
-          <p class="text-sm text-ivory-muted leading-relaxed mb-6 max-w-xl">
-            Inspect the same shot from behind the cue, behind the pocket, from side cue-elevation profile, top-down, or free 360° orbit. Lock the camera stiffly during shots or track the cue ball in real time, and drag balls anywhere on the felt in Setup Mode.
-          </p>
+        {/* 3D Championship Showcase */}
+        <div class="rounded-2xl bg-surface-card border border-surface-subtle overflow-hidden flex flex-col">
+          <div class="bg-[#05080C] border-b border-surface-subtle p-6 relative">
+            <svg viewBox="0 0 600 260" class="w-full h-auto rounded-lg" aria-label="3D Crucible Arena Camera Perspective">
+              <defs>
+                <linearGradient id="table-3d" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stop-color="#093B24" />
+                  <stop offset="100%" stop-color="#136A42" />
+                </linearGradient>
+                <radialGradient id="canopy-glow" cx="50%" cy="20%" r="65%">
+                  <stop offset="0%" stop-color="rgba(255,245,220,0.22)" />
+                  <stop offset="100%" stop-color="transparent" />
+                </radialGradient>
+              </defs>
+              {/* Arena room */}
+              <rect x="0" y="0" width="600" height="260" fill="#060A10" />
+              <ellipse cx="300" cy="70" rx="260" ry="120" fill="url(#canopy-glow)" />
+              {/* Sconce lights */}
+              <circle cx="170" cy="48" r="4" fill="#F2CE74" opacity="0.85" />
+              <circle cx="430" cy="48" r="4" fill="#F2CE74" opacity="0.85" />
 
-          <div class="space-y-3 border-t border-surface-subtle pt-5 text-xs">
-            <div class="flex items-baseline justify-between py-2 border-b border-surface-subtle/60">
-              <span class="font-semibold text-ivory-text">5 Synchronized Camera Stances</span>
-              <span class="font-mono text-brass-primary">Cue · Target · Side · Top · Orbit</span>
+              {/* 3D Perspective Table */}
+              <polygon points="155,86 445,86 556,248 44,248" fill="#3B1A0A" stroke="#E2B857" stroke-width="2" />
+              <polygon points="172,94 428,94 522,238 78,238" fill="url(#table-3d)" />
+              {/* Baulk & D in perspective */}
+              <line x1="98" y1="205" x2="502" y2="205" stroke="rgba(250,247,240,0.5)" stroke-width="1.5" />
+              <path d="M 245 205 C 250 232 350 232 355 205" fill="none" stroke="rgba(250,247,240,0.5)" stroke-width="1.5" />
+
+              {/* Trajectory ray up-table */}
+              <line x1="300" y1="205" x2="300" y2="132" stroke="#FAF7F0" stroke-width="2.2" />
+              <line x1="300" y1="132" x2="365" y2="108" stroke="#FF5757" stroke-width="2.2" />
+
+              {/* Balls in perspective */}
+              <circle cx="300" cy="100" r="6" fill="#18181B" stroke="#52525B" stroke-width="1" />
+              <circle cx="300" cy="132" r="9.5" fill="#E11D48" />
+              <circle cx="297" cy="129" r="2.8" fill="#FDA4AF" />
+              <circle cx="348" cy="144" r="9" fill="#2563EB" />
+              {/* Cue Ball in foreground */}
+              <ellipse cx="304" cy="212" rx="16" ry="7" fill="rgba(0,0,0,0.45)" />
+              <circle cx="300" cy="204" r="17" fill="#FAF7F0" />
+              <circle cx="294" cy="197" r="5" fill="#FFFFFF" />
+              {/* Cue Stick angled behind cue ball */}
+              <polygon points="295,216 305,216 312,260 288,260" fill="#E2B857" />
+              <rect x="295" y="214" width="10" height="4" fill="#2563EB" />
+            </svg>
+          </div>
+
+          <div class="p-6 sm:p-7 flex-1 flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <h3 class="font-serif text-xl font-bold text-ivory-text">
+                  3D Crucible Views &amp; Isolated Aim
+                </h3>
+                <span class="font-mono text-[11px] text-brass-primary">Three.js WebGL</span>
+              </div>
+              <p class="text-xs sm:text-sm text-ivory-muted leading-relaxed">
+                Separate <strong>Drag: Aim</strong> from <strong>Drag: Cam</strong> so the camera never jerks while lining up fine cuts. Inspect shots from 5 angles—<em>Cue</em>, <em>Target</em>, <em>Side</em>, <em>Top</em>, and <em>Orbit</em>—with <strong>Stiff</strong> or <strong>Follow</strong> shot tracking.
+              </p>
             </div>
-            <div class="flex items-baseline justify-between py-2 border-b border-surface-subtle/60">
-              <span class="font-semibold text-ivory-text">Dynamic Cue &amp; Tip Customization</span>
-              <span class="font-mono text-brass-primary">Carbon · Ash · Maple · Soft/Hard Tip</span>
-            </div>
-            <div class="flex items-baseline justify-between py-2 border-b border-surface-subtle/60">
-              <span class="font-semibold text-ivory-text">Tunable Table Surfaces &amp; Borders</span>
-              <span class="font-mono text-chalk-cyan">μr 0.022–0.056 · Restitution 0.56–0.93</span>
-            </div>
-            <div class="flex items-baseline justify-between py-2">
-              <span class="font-semibold text-ivory-text">Free Ball Placement Mode</span>
-              <span class="font-mono text-chalk-cyan">Drag Any Ball in 2D or 3D</span>
+            <div class="mt-5 pt-4 border-t border-surface-subtle flex items-center justify-between text-xs font-mono">
+              <span class="text-ivory-faint">Lazy-Loaded · 5 Camera Angles</span>
+              <a href="/play?mode=3d" class="text-brass-primary hover:text-brass-hover font-bold">Open 3D Arena &rarr;</a>
             </div>
           </div>
         </div>
@@ -203,53 +287,97 @@ const curriculumRows = [
   </section>
 
   {/* ════════════════════════════════════════════════════════════════════════
-      SECTION 3: PHYSICS CURRICULUM & PLAYABLE LECTURE DRILLS
+      SECTION 3: TABLE & EQUIPMENT PHYSICS LABORATORY
+  ════════════════════════════════════════════════════════════════════════ */}
+  <section class="border-b border-surface-subtle bg-felt-darkest/75">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-16 lg:py-20">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+        <div class="lg:col-span-5">
+          <h2 class="font-serif text-3xl font-bold text-ivory-text mb-3">
+            Tune Every Variable of the Table
+          </h2>
+          <p class="text-sm text-ivory-muted leading-relaxed mb-6">
+            Equipment changes physics. Swap cue shafts, leather tips, baize cloth nap, and rubber cushion elasticity inside the simulator to observe squirt deflection, stopping distance, and rebound changes immediately.
+          </p>
+          <a
+            href="/play"
+            class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-surface-card hover:bg-surface-elevated border border-brass-primary/40 text-brass-primary font-semibold text-xs uppercase tracking-wider transition-colors"
+          >
+            Open Table &amp; Cue Lab &rarr;
+          </a>
+        </div>
+
+        <div class="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div class="p-5 rounded-xl bg-surface-card border border-surface-subtle">
+            <div class="text-[11px] font-mono text-brass-primary uppercase mb-1">Cue Shafts</div>
+            <div class="font-serif text-base font-bold text-ivory-text mb-1.5">Carbon Low-Deflection to Ash</div>
+            <p class="text-xs text-ivory-muted">Compare 12% squirt carbon shafts against classic 55% ash and heavy break shafts.</p>
+          </div>
+          <div class="p-5 rounded-xl bg-surface-card border border-surface-subtle">
+            <div class="text-[11px] font-mono text-chalk-cyan uppercase mb-1">Cue Tips</div>
+            <div class="font-serif text-base font-bold text-ivory-text mb-1.5">Soft Elk · Medium · Hard Phenolic</div>
+            <p class="text-xs text-ivory-muted">Modifies safe spin offset radius (0.72R–0.90R) before miscue and spin transfer bite.</p>
+          </div>
+          <div class="p-5 rounded-xl bg-surface-card border border-surface-subtle">
+            <div class="text-[11px] font-mono text-chalk-cyan uppercase mb-1">Cloth Speed</div>
+            <div class="font-serif text-base font-bold text-ivory-text mb-1.5">Crucible Worsted to Heavy Nap</div>
+            <p class="text-xs text-ivory-muted">Adjust rolling friction (μr 0.022–0.056) and watch predicted roll distances scale live.</p>
+          </div>
+          <div class="p-5 rounded-xl bg-surface-card border border-surface-subtle">
+            <div class="text-[11px] font-mono text-brass-primary uppercase mb-1">Border Elasticity</div>
+            <div class="font-serif text-base font-bold text-ivory-text mb-1.5">Dead Club to High-Bounce Lab</div>
+            <p class="text-xs text-ivory-muted">Set cushion restitution (e = 0.56–0.93) to study multi-rail rebound angles.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {/* ════════════════════════════════════════════════════════════════════════
+      SECTION 4: PLAYABLE LECTURES & GUIDED SCENARIOS
   ════════════════════════════════════════════════════════════════════════ */}
   <section class="border-b border-surface-subtle bg-surface-base">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 py-16 lg:py-24">
       <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
         <div>
           <h2 class="font-serif text-3xl sm:text-4xl font-bold text-ivory-text mb-2">
-            Theory Paired With Playable Drills
+            Lectures With Built-In Interactive Drills
           </h2>
           <p class="text-sm text-ivory-muted max-w-2xl">
-            Every concept in our Learning Center ships with an interactive table scenario tuned to that exact physics lesson. Read the mechanics, adjust the tip offset, and strike the shot yourself.
+            Every article embeds an interactive practice table tuned to its physics lesson and opens directly in the 2D/3D simulator with preset ball layouts.
           </p>
         </div>
         <a
           href="/learn"
           class="text-xs font-mono uppercase tracking-wider text-brass-primary hover:text-brass-hover transition-colors shrink-0"
         >
-          All Physics Articles &rarr;
+          Browse All Lectures &rarr;
         </a>
       </div>
 
-      {/* Editorial Ledger Table */}
       <div class="divide-y divide-surface-subtle border-y border-surface-subtle">
         {curriculumRows.map((row) => (
-          <div class="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-surface-card/40 px-2 transition-colors">
-            <div class="min-w-0">
-              <div class="flex items-center gap-3">
+          <div class="py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-surface-card/45 px-3 transition-colors">
+            <div class="max-w-2xl">
+              <div class="flex flex-wrap items-center gap-3">
                 <h3 class="font-serif text-base sm:text-lg font-bold text-ivory-text">
                   {row.title}
                 </h3>
-                <span class="text-[11px] font-mono text-ivory-faint hidden sm:inline">
-                  {row.topic}
-                </span>
+                <span class="text-[11px] font-mono text-chalk-cyan">{row.formula}</span>
               </div>
-              <p class="text-xs font-mono text-chalk-cyan mt-0.5">{row.metric}</p>
+              <p class="text-xs text-ivory-muted mt-1">{row.summary}</p>
             </div>
 
-            <div class="flex items-center gap-3 shrink-0">
+            <div class="flex items-center gap-2.5 shrink-0">
               <a
                 href={row.learnHref}
-                class="px-3 py-1.5 rounded-lg bg-surface-card hover:bg-surface-elevated border border-surface-subtle text-xs text-ivory-muted hover:text-ivory-text transition-colors"
+                class="px-3.5 py-2 rounded-lg bg-surface-card hover:bg-surface-elevated border border-surface-subtle text-xs text-ivory-muted hover:text-ivory-text transition-colors"
               >
                 Read Lecture
               </a>
               <a
                 href={row.playHref}
-                class="px-3.5 py-1.5 rounded-lg bg-brass-primary hover:bg-brass-hover text-surface-base font-bold text-xs transition-colors"
+                class="px-4 py-2 rounded-lg bg-brass-primary hover:bg-brass-hover text-surface-base font-bold text-xs transition-colors"
               >
                 Play Drill
               </a>
@@ -261,28 +389,28 @@ const curriculumRows = [
   </section>
 
   {/* ════════════════════════════════════════════════════════════════════════
-      SECTION 4: CLOSING STATEMENT
+      SECTION 5: CLOSING ARENA CALLOUT
   ════════════════════════════════════════════════════════════════════════ */}
-  <section class="bg-felt-darkest">
+  <section class="bg-gradient-to-b from-surface-card to-surface-base">
     <div class="max-w-5xl mx-auto px-4 sm:px-6 py-20 text-center">
       <h2 class="font-serif text-3xl sm:text-5xl font-bold text-ivory-text mb-4">
-        Step Up to the Baize
+        Step Up to the Table
       </h2>
       <p class="text-sm sm:text-base text-ivory-muted max-w-xl mx-auto mb-8 leading-relaxed">
-        Open the free-play 22-ball championship rack, customize your cue shaft and cloth speed, or verify shot error down to the millimeter.
+        Start a full 22-ball championship rack, place any ball freely on the baize, and test your positional cue-ball instincts against real physics.
       </p>
       <div class="flex flex-wrap items-center justify-center gap-4">
         <a
           href="/play?rack=championship"
           class="px-8 py-3.5 rounded-lg bg-brass-primary hover:bg-brass-hover text-surface-base font-bold text-xs tracking-wider uppercase transition-colors shadow-brass-glow"
         >
-          Start 22-Ball Frame
+          Play 22-Ball Frame
         </a>
         <a
           href="/about"
           class="px-6 py-3.5 rounded-lg bg-surface-card hover:bg-surface-elevated border border-surface-subtle text-ivory-text text-xs font-semibold tracking-wider uppercase transition-colors"
         >
-          Platform Architecture
+          Engine Architecture
         </a>
       </div>
     </div>
@@ -301,17 +429,17 @@ const curriculumRows = [
     }
   }
 
-  .hero-reveal {
+  .hero-enter {
     animation: heroEnter 420ms cubic-bezier(0.23, 1, 0.32, 1) both;
   }
 
-  .hero-reveal-delayed {
-    animation: heroEnter 520ms cubic-bezier(0.23, 1, 0.32, 1) 80ms both;
+  .hero-enter-delay {
+    animation: heroEnter 520ms cubic-bezier(0.23, 1, 0.32, 1) 90ms both;
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .hero-reveal,
-    .hero-reveal-delayed {
+    .hero-enter,
+    .hero-enter-delay {
       animation: none;
     }
   }

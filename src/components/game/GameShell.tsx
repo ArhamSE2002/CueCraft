@@ -58,6 +58,8 @@ export const GameShell: React.FC = () => {
     setGameMode,
     interactionMode,
     setInteractionMode,
+    threeDragMode,
+    setThreeDragMode,
     threeCameraMode,
     setThreeCameraMode,
     cameraFollowMode,
@@ -253,6 +255,7 @@ export const GameShell: React.FC = () => {
       r.viewMode = threeCameraMode;
       r.followMode = cameraFollowMode;
       r.interactionMode = interactionMode;
+      r.dragMode = threeDragMode;
       r.tacticalElevation = tacticalElevation;
       r.showTrajectories = showTrajectories;
       r.showGhostBall = showGhostBall;
@@ -315,6 +318,7 @@ export const GameShell: React.FC = () => {
     threeCameraMode,
     cameraFollowMode,
     interactionMode,
+    threeDragMode,
     tacticalElevation,
     showTrajectories,
     showGhostBall,
@@ -816,7 +820,10 @@ export const GameShell: React.FC = () => {
                   ).map((cam) => (
                     <button
                       key={cam.id}
-                      onClick={() => setThreeCameraMode(cam.id)}
+                      onClick={() => {
+                        setThreeCameraMode(cam.id);
+                        threeRendererRef.current?.syncCameraToAim(aimAngleRad);
+                      }}
                       className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition-colors ${
                         threeCameraMode === cam.id
                           ? 'bg-brass-primary text-surface-base font-bold'
@@ -826,6 +833,39 @@ export const GameShell: React.FC = () => {
                       {cam.label}
                     </button>
                   ))}
+                </div>
+
+                {/* Explicit 3D Drag Selector: Move Aim Only vs Move Camera */}
+                <div className="flex items-center gap-0.5 pl-1.5 ml-1 border-l border-surface-subtle">
+                  <button
+                    onClick={() => setThreeDragMode('aim')}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition-colors ${
+                      threeDragMode === 'aim'
+                        ? 'bg-chalk-cyan text-surface-base font-bold'
+                        : 'text-ivory-muted hover:text-ivory-text'
+                    }`}
+                    title="Mouse drag moves ONLY the cue aim while keeping camera steady"
+                  >
+                    Drag: Aim
+                  </button>
+                  <button
+                    onClick={() => setThreeDragMode('camera')}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition-colors ${
+                      threeDragMode === 'camera'
+                        ? 'bg-chalk-cyan text-surface-base font-bold'
+                        : 'text-ivory-muted hover:text-ivory-text'
+                    }`}
+                    title="Mouse drag rotates the 3D camera smoothly without changing shot aim (or Right-Drag anytime)"
+                  >
+                    Drag: Cam
+                  </button>
+                  <button
+                    onClick={() => threeRendererRef.current?.syncCameraToAim(aimAngleRad)}
+                    className="px-1.5 py-0.5 rounded text-[10px] font-mono text-ivory-muted hover:text-brass-primary transition-colors"
+                    title="Re-center camera behind current cue aim line"
+                  >
+                    Center
+                  </button>
                 </div>
 
                 {threeCameraMode === 'tactical' && (

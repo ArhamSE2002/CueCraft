@@ -6,6 +6,7 @@ import { TIP_CATALOG } from '../engine/equipment/Equipment';
 export type RenderMode = '2d' | '3d';
 export type GameMode = 'practice' | 'championship' | 'lesson';
 export type InteractionMode = 'aim' | 'move';
+export type ThreeDragMode = 'aim' | 'camera';
 export type CameraViewMode = 'tactical' | 'target' | 'side' | 'overhead' | 'orbit';
 export type CameraFollowMode = 'stiff' | 'follow';
 
@@ -13,6 +14,7 @@ export interface GameState {
   renderMode: RenderMode;
   gameMode: GameMode;
   interactionMode: InteractionMode;
+  threeDragMode: ThreeDragMode;
   threeCameraMode: CameraViewMode;
   cameraFollowMode: CameraFollowMode;
   aimAngleRad: number;
@@ -52,6 +54,7 @@ export interface GameState {
   setRenderMode: (mode: RenderMode) => void;
   setGameMode: (mode: GameMode) => void;
   setInteractionMode: (mode: InteractionMode) => void;
+  setThreeDragMode: (mode: ThreeDragMode) => void;
   setThreeCameraMode: (cam: CameraViewMode) => void;
   setCameraFollowMode: (follow: CameraFollowMode) => void;
   setAimAngleRad: (angle: number) => void;
@@ -88,6 +91,7 @@ export const useGameStore = create<GameState>((set) => ({
   renderMode: '2d',
   gameMode: 'practice',
   interactionMode: 'aim',
+  threeDragMode: 'aim',
   threeCameraMode: 'tactical',
   cameraFollowMode: 'stiff',
   aimAngleRad: 0,
@@ -124,6 +128,7 @@ export const useGameStore = create<GameState>((set) => ({
   setRenderMode: (renderMode) => set({ renderMode }),
   setGameMode: (gameMode) => set({ gameMode }),
   setInteractionMode: (interactionMode) => set({ interactionMode }),
+  setThreeDragMode: (threeDragMode) => set({ threeDragMode }),
   setThreeCameraMode: (threeCameraMode) => set({ threeCameraMode }),
   setCameraFollowMode: (cameraFollowMode) => set({ cameraFollowMode }),
   setAimAngleRad: (aimAngleRad) => set({ aimAngleRad }),

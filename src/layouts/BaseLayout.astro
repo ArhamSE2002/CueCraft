@@ -1,6 +1,7 @@
 ---
 import '../styles/global.css';
 import { siteConfig } from '../config/site';
+import CueCraftLogo from '../components/brand/CueCraftLogo.astro';
 
 interface Props {
   title?: string;
@@ -72,14 +73,12 @@ const currentPath = Astro.url.pathname;
       }`}>
         {/* Brand Crest */}
         <a href="/" class="flex items-center gap-2.5 group">
-          <div class="w-8 h-8 rounded-lg bg-felt-surface border border-brass-primary/40 flex items-center justify-center shadow-sm group-hover:border-brass-primary transition-colors">
-            <span class="w-3 h-3 rounded-full bg-brass-primary shadow-brass-glow" />
-          </div>
+          <CueCraftLogo size={noFooter ? 30 : 36} class="transition-transform duration-200 group-hover:scale-105 shrink-0" />
           <div class="flex flex-col">
-            <span class="font-serif text-lg font-bold tracking-wide text-ivory-text group-hover:text-brass-hover transition-colors">
+            <span class="font-serif text-lg font-bold tracking-wide text-ivory-text group-hover:text-brass-hover transition-colors leading-tight">
               {siteConfig.name}
             </span>
-            <span class="text-[9px] font-mono tracking-widest uppercase text-brass-muted">
+            <span class="text-[9px] font-mono tracking-widest uppercase text-brass-primary/80">
               Precision Snooker
             </span>
           </div>
@@ -132,8 +131,8 @@ const currentPath = Astro.url.pathname;
           <div class="grid grid-cols-1 md:grid-cols-4 gap-10 mb-12">
             {/* Brand Philosophy */}
             <div class="md:col-span-2 flex flex-col gap-3">
-              <div class="flex items-center gap-2">
-                <span class="w-2.5 h-2.5 rounded-full bg-brass-primary" />
+              <div class="flex items-center gap-2.5">
+                <CueCraftLogo size={28} />
                 <span class="font-serif text-lg font-bold tracking-wide text-ivory-text">
                   {siteConfig.name}
                 </span>

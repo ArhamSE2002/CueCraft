@@ -271,83 +271,106 @@ export class CanvasTableRenderer {
 
   private drawTrajectories(prediction: TrajectoryPrediction): void {
     const ctx = this.ctx;
+    const sPx = (logicalMm: number, minPx: number) => Math.max(minPx, logicalMm * this.scale);
 
-    // 1. Cue Ball Aim Line (or Curved Swerve Line) with multi-bounce opacity fading
+    // 1. Cue Ball Aim Line (or Curved Swerve Line) with high-contrast halo + core
     for (const segment of prediction.cuePath) {
       const s = this.toScreen(segment.start);
       const e = this.toScreen(segment.end);
       const bounce = (segment as any).bounce ?? 0;
-      // Each cushion bounce fades the line: bounce 0 = full, bounce 1 = 65%, bounce 2 = 42%, etc.
-      const alpha = Math.pow(0.65, bounce);
+      const alpha = Math.max(0.45, Math.pow(0.75, bounce));
+
+      // Subtle dark contrast under-stroke so lines always stand out cleanly against felt
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(s.x, s.y);
+      ctx.lineTo(e.x, e.y);
+      ctx.strokeStyle = `rgba(3, 12, 8, ${(0.55 * alpha).toFixed(2)})`;
+      ctx.lineWidth = sPx(11, 4.2);
+      ctx.lineCap = 'round';
+      ctx.stroke();
 
       ctx.beginPath();
       ctx.moveTo(s.x, s.y);
       ctx.lineTo(e.x, e.y);
 
       if (segment.type === 'swerve') {
-        // Glowing cyan curved swerve trail
-        ctx.strokeStyle = `rgba(45, 212, 191, ${(0.9 * alpha).toFixed(2)})`;
-        ctx.lineWidth = 2.2 * this.scale;
+        ctx.strokeStyle = `rgba(45, 212, 191, ${Math.min(1, alpha + 0.1).toFixed(2)})`;
+        ctx.lineWidth = sPx(7, 2.8);
         ctx.setLineDash([]);
         ctx.stroke();
       } else if (segment.type === 'cushion-reflection') {
-        // Each cushion bounce: brass-tinted dashed, progressively more transparent
-        const dashLen = 4 * this.scale;
-        ctx.strokeStyle = `rgba(197, 160, 89, ${(0.8 * alpha).toFixed(2)})`;
-        ctx.setLineDash([dashLen, dashLen]);
-        ctx.lineWidth = 1.6 * this.scale;
+        ctx.strokeStyle = `rgba(245, 196, 81, ${alpha.toFixed(2)})`;
+        ctx.setLineDash([sPx(18, 8), sPx(10, 5)]);
+        ctx.lineWidth = sPx(6, 2.3);
         ctx.stroke();
         ctx.setLineDash([]);
-        // Draw bounce count indicator dot at the start of each reflected segment
         if (bounce > 0) {
-          ctx.fillStyle = `rgba(197, 160, 89, ${(0.9 * alpha).toFixed(2)})`;
+          ctx.fillStyle = `rgba(245, 196, 81, ${alpha.toFixed(2)})`;
           ctx.beginPath();
-          ctx.arc(s.x, s.y, 3 * this.scale, 0, Math.PI * 2);
+          ctx.arc(s.x, s.y, sPx(8, 3.5), 0, Math.PI * 2);
           ctx.fill();
         }
       } else {
-        // Primary cue path: white/ivory dashed
-        ctx.strokeStyle = `rgba(247, 245, 238, ${(0.82 * alpha).toFixed(2)})`;
-        ctx.setLineDash([6 * this.scale, 3 * this.scale]);
-        ctx.lineWidth = 1.6 * this.scale;
+        // Crisp bright ivory primary aim ray
+        ctx.strokeStyle = `rgba(255, 253, 245, 0.96)`;
+        ctx.setLineDash([sPx(22, 10), sPx(11, 5)]);
+        ctx.lineWidth = sPx(6.5, 2.5);
         ctx.stroke();
         ctx.setLineDash([]);
       }
+      ctx.restore();
     }
 
-    // 2. Ghost Ball
+    // 2. Ghost Ball with crisp contact reticle
     if (this.options.showGhostBall && prediction.ghostBall) {
       const gp = this.toScreen(prediction.ghostBall);
       const r = SnookerTable.BALL_RADIUS * this.scale;
 
+      ctx.save();
       ctx.strokeStyle = '#2DD4BF';
-      ctx.lineWidth = 1.8 * this.scale;
+      ctx.lineWidth = sPx(6, 2.4);
       ctx.beginPath();
       ctx.arc(gp.x, gp.y, r, 0, Math.PI * 2);
       ctx.stroke();
 
-      ctx.fillStyle = 'rgba(45, 212, 191, 0.15)';
+      ctx.fillStyle = 'rgba(45, 212, 191, 0.24)';
       ctx.fill();
+
+      // Center precision dot
+      ctx.fillStyle = '#2DD4BF';
+      ctx.beginPath();
+      ctx.arc(gp.x, gp.y, Math.max(2, r * 0.16), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
     }
 
     // 3. ALL Object Ball Projected Paths (including post-border cushion rebounds & secondary balls!)
     const objPaths = prediction.objectBallPaths ?? [];
     if (objPaths.length > 0) {
       objPaths.forEach((obj, objIdx) => {
-        const strokeHex = objIdx === 0 ? '#EF4444' : '#F59E0B';
+        const strokeHex = objIdx === 0 ? '#FF5757' : '#FBBF24';
         const segs = obj.segments;
         segs.forEach((segment, segIdx) => {
           const s = this.toScreen(segment.start);
           const e = this.toScreen(segment.end);
           const bounce = segment.bounce ?? 0;
-          const alpha = Math.max(0.3, Math.pow(0.72, bounce));
+          const alpha = Math.max(0.45, Math.pow(0.76, bounce));
 
           ctx.save();
           ctx.globalAlpha = alpha;
+          // Under-stroke contrast
+          ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+          ctx.lineWidth = sPx(10, 4.0);
+          ctx.beginPath();
+          ctx.moveTo(s.x, s.y);
+          ctx.lineTo(e.x, e.y);
+          ctx.stroke();
+
           ctx.strokeStyle = strokeHex;
-          ctx.lineWidth = 2 * this.scale;
+          ctx.lineWidth = sPx(6.5, 2.5);
           if (bounce > 0) {
-            ctx.setLineDash([5 * this.scale, 3 * this.scale]);
+            ctx.setLineDash([sPx(18, 8), sPx(10, 5)]);
           }
           ctx.beginPath();
           ctx.moveTo(s.x, s.y);
@@ -358,7 +381,7 @@ export class CanvasTableRenderer {
           if (bounce > 0) {
             ctx.fillStyle = strokeHex;
             ctx.beginPath();
-            ctx.arc(s.x, s.y, 2.8 * this.scale, 0, Math.PI * 2);
+            ctx.arc(s.x, s.y, sPx(8, 3.5), 0, Math.PI * 2);
             ctx.fill();
           }
 
@@ -368,15 +391,14 @@ export class CanvasTableRenderer {
           ctx.restore();
         });
 
-        // Draw target resting marker or POT badge
         const endScreen = this.toScreen(obj.endPos);
         const r = SnookerTable.BALL_RADIUS * this.scale;
         ctx.save();
         ctx.strokeStyle = strokeHex;
-        ctx.lineWidth = 1.4 * this.scale;
-        ctx.setLineDash([2.5 * this.scale, 2.5 * this.scale]);
+        ctx.lineWidth = Math.max(1.8, 4 * this.scale);
+        ctx.setLineDash([Math.max(4, 9 * this.scale), Math.max(3, 6 * this.scale)]);
         ctx.beginPath();
-        ctx.arc(endScreen.x, endScreen.y, r * 0.9, 0, Math.PI * 2);
+        ctx.arc(endScreen.x, endScreen.y, r * 0.92, 0, Math.PI * 2);
         ctx.stroke();
         ctx.restore();
       });
@@ -385,14 +407,16 @@ export class CanvasTableRenderer {
         const s = this.toScreen(segment.start);
         const e = this.toScreen(segment.end);
 
-        ctx.strokeStyle = '#EF4444';
-        ctx.lineWidth = 2 * this.scale;
+        ctx.save();
+        ctx.strokeStyle = '#FF5757';
+        ctx.lineWidth = sPx(6.5, 2.5);
         ctx.beginPath();
         ctx.moveTo(s.x, s.y);
         ctx.lineTo(e.x, e.y);
         ctx.stroke();
 
-        this.drawArrowHead(s, e, '#EF4444');
+        this.drawArrowHead(s, e, '#FF5757');
+        ctx.restore();
       }
     }
 
@@ -401,13 +425,20 @@ export class CanvasTableRenderer {
       const s = this.toScreen(segment.start);
       const e = this.toScreen(segment.end);
       const bounce = segment.bounce ?? 0;
-      const alpha = Math.max(0.3, Math.pow(0.72, bounce));
+      const alpha = Math.max(0.45, Math.pow(0.76, bounce));
 
       ctx.save();
       ctx.globalAlpha = alpha;
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+      ctx.lineWidth = sPx(9, 3.8);
+      ctx.beginPath();
+      ctx.moveTo(s.x, s.y);
+      ctx.lineTo(e.x, e.y);
+      ctx.stroke();
+
       ctx.strokeStyle = bounce > 0 ? '#60A5FA' : '#38BDF8';
-      ctx.lineWidth = 1.8 * this.scale;
-      ctx.setLineDash([3 * this.scale, 3 * this.scale]);
+      ctx.lineWidth = sPx(6, 2.3);
+      ctx.setLineDash([sPx(12, 6), sPx(8, 4)]);
       ctx.beginPath();
       ctx.moveTo(s.x, s.y);
       ctx.lineTo(e.x, e.y);
@@ -416,7 +447,7 @@ export class CanvasTableRenderer {
       if (bounce > 0) {
         ctx.fillStyle = '#38BDF8';
         ctx.beginPath();
-        ctx.arc(s.x, s.y, 2.5 * this.scale, 0, Math.PI * 2);
+        ctx.arc(s.x, s.y, sPx(7, 3.2), 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.restore();
@@ -427,9 +458,9 @@ export class CanvasTableRenderer {
       const fp = this.toScreen(prediction.cueFinalPos);
       const r = SnookerTable.BALL_RADIUS * this.scale;
       ctx.save();
-      ctx.strokeStyle = 'rgba(247, 245, 238, 0.55)';
-      ctx.lineWidth = 1.4 * this.scale;
-      ctx.setLineDash([2.5 * this.scale, 2.5 * this.scale]);
+      ctx.strokeStyle = 'rgba(255, 253, 245, 0.78)';
+      ctx.lineWidth = Math.max(1.8, 4 * this.scale);
+      ctx.setLineDash([Math.max(4, 9 * this.scale), Math.max(3, 6 * this.scale)]);
       ctx.beginPath();
       ctx.arc(fp.x, fp.y, r * 0.95, 0, Math.PI * 2);
       ctx.stroke();

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { SnookerTable } from '../../engine/table/SnookerTable';
 import { Ball } from '../../engine/physics/Ball';
 import type { TrajectoryPrediction } from '../../engine/physics/PhysicsEngine';
-import type { CameraViewMode, CameraFollowMode, InteractionMode } from '../../stores/gameStore';
+import type { CameraViewMode, CameraFollowMode, InteractionMode, ThreeDragMode } from '../../stores/gameStore';
 import type { ClothSpec, CueSpec, CueTipSpec } from '../../engine/equipment/Equipment';
 
 export type { CameraViewMode };
@@ -32,6 +32,7 @@ export class ThreeTableRenderer {
   public viewMode: CameraViewMode = 'tactical';
   public followMode: CameraFollowMode = 'stiff';
   public interactionMode: InteractionMode = 'aim';
+  public dragMode: ThreeDragMode = 'aim';
   public zoom: number = 1.0;
   public tacticalElevation: 'low' | 'med' | 'high' = 'med';
   public showTrajectories: boolean = true;
@@ -45,7 +46,9 @@ export class ThreeTableRenderer {
   public onMoveBallDrag?: (ballId: string, tablePosMm: { x: number; y: number }) => void;
   public onMoveBallEnd?: () => void;
 
-  // Camera lerp & locked state
+  // Camera lerp, decoupled anchor angle & locked state
+  private anchoredCamAngleRad: number | null = null;
+  private isRightMouseDown: boolean = false;
   private targetCameraPos = new THREE.Vector3(-1.8, 0.85, 0);
   private targetLookAt = new THREE.Vector3(0, 0.026, 0);
   private currentLookAt = new THREE.Vector3(0, 0.026, 0);
@@ -761,6 +764,10 @@ export class ThreeTableRenderer {
     }
   }
 
+  public syncCameraToAim(aimAngleRad: number): void {
+    this.anchoredCamAngleRad = aimAngleRad;
+  }
+
   private updateCameraPosition(
     cueBall?: Ball,
     aimAngleRad?: number,
@@ -769,6 +776,17 @@ export class ThreeTableRenderer {
   ): void {
     // Only show ceiling lamp fixture in free Orbit view so it never blocks overhead/aim views
     this.lampsGroup.visible = this.viewMode === 'orbit';
+
+    // Initialize anchor angle on first render
+    if (this.anchoredCamAngleRad === null && aimAngleRad !== undefined) {
+      this.anchoredCamAngleRad = aimAngleRad;
+    }
+
+    // Decoupled Camera Angle: stays steady while aiming unless user selects Follow or drags Camera!
+    const camAngle =
+      this.followMode === 'follow' && aimAngleRad !== undefined
+        ? aimAngleRad
+        : this.anchoredCamAngleRad ?? aimAngleRad ?? 0;
 
     // If simulation is running AND followMode === 'stiff' (except manual Orbit dragging), hold camera stationary!
     if (isSimulatingNow && this.followMode === 'stiff' && this.viewMode !== 'orbit') {
@@ -780,10 +798,10 @@ export class ThreeTableRenderer {
       return;
     }
 
-    if (this.viewMode === 'tactical' && cueBall && aimAngleRad !== undefined) {
+    if (this.viewMode === 'tactical' && cueBall) {
       const cuePos = this.toThreeCoords(cueBall.position);
-      const dirX = Math.cos(aimAngleRad);
-      const dirZ = Math.sin(aimAngleRad);
+      const dirX = Math.cos(camAngle);
+      const dirZ = Math.sin(camAngle);
 
       let distMult = 1.0;
       let heightMult = 1.0;
@@ -801,16 +819,15 @@ export class ThreeTableRenderer {
       this.targetCameraPos.set(cuePos.x - dirX * camDist, camHeight, cuePos.z - dirZ * camDist);
       this.targetLookAt.set(cuePos.x + dirX * 1.8, 0.026, cuePos.z + dirZ * 1.8);
       this.camera.up.set(0, 1, 0);
-    } else if (this.viewMode === 'target' && cueBall && aimAngleRad !== undefined) {
-      // Look BACK along the cut angle from behind the target ball / ghost ball
+    } else if (this.viewMode === 'target' && cueBall) {
       const focusPos = prediction?.targetBall
         ? this.toThreeCoords(prediction.targetBall.position)
         : this.toThreeCoords(cueBall.position).add(
-            new THREE.Vector3(Math.cos(aimAngleRad) * 1.4, 0, Math.sin(aimAngleRad) * 1.4)
+            new THREE.Vector3(Math.cos(camAngle) * 1.4, 0, Math.sin(camAngle) * 1.4)
           );
       const cuePos = this.toThreeCoords(cueBall.position);
-      const dirX = Math.cos(aimAngleRad);
-      const dirZ = Math.sin(aimAngleRad);
+      const dirX = Math.cos(camAngle);
+      const dirZ = Math.sin(camAngle);
 
       const camDist = 0.85 / this.zoom;
       this.targetCameraPos.set(
@@ -820,22 +837,21 @@ export class ThreeTableRenderer {
       );
       this.targetLookAt.set(cuePos.x, 0.026, cuePos.z);
       this.camera.up.set(0, 1, 0);
-    } else if (this.viewMode === 'side' && cueBall && aimAngleRad !== undefined) {
-      // Side profile view perpendicular to shot line — great for viewing cue elevation & curves
+    } else if (this.viewMode === 'side' && cueBall) {
       const cuePos = this.toThreeCoords(cueBall.position);
-      const perpX = -Math.sin(aimAngleRad);
-      const perpZ = Math.cos(aimAngleRad);
+      const perpX = -Math.sin(camAngle);
+      const perpZ = Math.cos(camAngle);
       const sideDist = 1.25 / this.zoom;
 
       this.targetCameraPos.set(
-        cuePos.x + perpX * sideDist + Math.cos(aimAngleRad) * 0.35,
+        cuePos.x + perpX * sideDist + Math.cos(camAngle) * 0.35,
         0.38 / this.zoom,
-        cuePos.z + perpZ * sideDist + Math.sin(aimAngleRad) * 0.35
+        cuePos.z + perpZ * sideDist + Math.sin(camAngle) * 0.35
       );
       this.targetLookAt.set(
-        cuePos.x + Math.cos(aimAngleRad) * 0.45,
+        cuePos.x + Math.cos(camAngle) * 0.45,
         0.05,
-        cuePos.z + Math.sin(aimAngleRad) * 0.45
+        cuePos.z + Math.sin(camAngle) * 0.45
       );
       this.camera.up.set(0, 1, 0);
     } else if (this.viewMode === 'overhead') {
@@ -844,7 +860,6 @@ export class ThreeTableRenderer {
       this.targetLookAt.set(0, 0, 0);
       this.camera.up.set(0, 0, -1);
     } else {
-      // 360 Orbit View (can follow cueBall if followMode === 'follow' during simulation!)
       const dist = this.orbitDistance / this.zoom;
       const focusCenter =
         isSimulatingNow && this.followMode === 'follow' && cueBall
@@ -860,25 +875,30 @@ export class ThreeTableRenderer {
       this.camera.up.set(0, 1, 0);
     }
 
-    this.camera.position.lerp(this.targetCameraPos, 0.18);
-    this.currentLookAt.lerp(this.targetLookAt, 0.18);
+    this.camera.position.lerp(this.targetCameraPos, 0.14);
+    this.currentLookAt.lerp(this.targetLookAt, 0.14);
     this.camera.lookAt(this.currentLookAt);
   }
 
   private bindEvents(): void {
     const dom = this.renderer.domElement;
 
+    dom.addEventListener('contextmenu', (e) => e.preventDefault());
+
     dom.addEventListener('mousedown', (e) => {
       this.isPointerDown = true;
+      this.isRightMouseDown = e.button === 2;
       this.previousMousePosition = { x: e.clientX, y: e.clientY };
       this.dragStartPos = { x: e.clientX, y: e.clientY };
 
       const hitMm = this.raycastTableMm(e.clientX, e.clientY);
-      if (hitMm && this.interactionMode === 'move' && this.onMoveBallStart) {
+      if (!this.isRightMouseDown && hitMm && this.interactionMode === 'move' && this.onMoveBallStart) {
         this.draggingBallId = this.onMoveBallStart(hitMm);
       } else if (
+        !this.isRightMouseDown &&
         hitMm &&
         this.interactionMode === 'aim' &&
+        this.dragMode === 'aim' &&
         (this.viewMode === 'overhead' || this.viewMode === 'target' || this.viewMode === 'side') &&
         this.onTableAim
       ) {
@@ -891,18 +911,34 @@ export class ThreeTableRenderer {
       const deltaX = e.clientX - this.previousMousePosition.x;
       const deltaY = e.clientY - this.previousMousePosition.y;
 
-      if (this.interactionMode === 'move' && this.draggingBallId && this.onMoveBallDrag) {
+      // Move Balls mode
+      if (!this.isRightMouseDown && this.interactionMode === 'move' && this.draggingBallId && this.onMoveBallDrag) {
         const hitMm = this.raycastTableMm(e.clientX, e.clientY);
         if (hitMm) this.onMoveBallDrag(this.draggingBallId, hitMm);
-      } else if (this.interactionMode === 'aim') {
+        this.previousMousePosition = { x: e.clientX, y: e.clientY };
+        return;
+      }
+
+      // Moving CAMERA explicitly (either dragMode === 'camera', right-click drag, or Orbit camera move)
+      const isMovingCamera = this.isRightMouseDown || this.dragMode === 'camera';
+
+      if (isMovingCamera) {
         if (this.viewMode === 'orbit') {
-          this.orbitAngles.theta -= deltaX * 0.007;
+          this.orbitAngles.theta -= deltaX * 0.0032; // Smooth low sensitivity
           this.orbitAngles.phi = Math.max(
             0.14,
-            Math.min(Math.PI / 2.05, this.orbitAngles.phi + deltaY * 0.007)
+            Math.min(Math.PI / 2.05, this.orbitAngles.phi + deltaY * 0.0032)
           );
-        } else if (this.viewMode === 'tactical' && this.onAimAdjust) {
-          this.onAimAdjust(-deltaX * 0.0035);
+        } else {
+          // Smoothly rotate anchored camera viewpoint around cue ball without altering shot aim!
+          this.anchoredCamAngleRad = (this.anchoredCamAngleRad ?? 0) - deltaX * 0.0028;
+        }
+      } else if (this.interactionMode === 'aim') {
+        // Aiming ONLY — camera remains steady!
+        if (this.viewMode === 'tactical' || this.viewMode === 'orbit') {
+          if (this.onAimAdjust) {
+            this.onAimAdjust(deltaX * 0.0014); // Gentle fine precision sensitivity
+          }
         } else if (
           (this.viewMode === 'overhead' || this.viewMode === 'target' || this.viewMode === 'side') &&
           this.onTableAim
@@ -917,17 +953,21 @@ export class ThreeTableRenderer {
 
     window.addEventListener('mouseup', (e) => {
       if (!this.isPointerDown) return;
+      const wasRightClick = this.isRightMouseDown;
       this.isPointerDown = false;
+      this.isRightMouseDown = false;
 
       if (this.draggingBallId && this.onMoveBallEnd) {
         this.onMoveBallEnd();
       }
       this.draggingBallId = null;
 
-      // In Orbit view, a clean click without dragging aims directly toward the clicked point!
+      // Single click (no drag) in Orbit aim mode aims toward clicked table coordinate
       const moveDist = Math.hypot(e.clientX - this.dragStartPos.x, e.clientY - this.dragStartPos.y);
       if (
+        !wasRightClick &&
         this.interactionMode === 'aim' &&
+        this.dragMode === 'aim' &&
         this.viewMode === 'orbit' &&
         moveDist < 5 &&
         e.target === dom &&
