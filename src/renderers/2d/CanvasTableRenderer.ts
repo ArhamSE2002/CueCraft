@@ -11,6 +11,12 @@ import {
   type CueTipSpec,
 } from '../../engine/equipment/Equipment';
 
+export interface ReplayComparisonOverlay {
+  predictedCuePath: Vector2D[];
+  actualCuePath: Vector2D[];
+  show: boolean;
+}
+
 export interface RendererOptions {
   showTrajectories: boolean;
   showGhostBall: boolean;
@@ -20,6 +26,8 @@ export interface RendererOptions {
   cueSpec?: CueSpec;
   tipSpec?: CueTipSpec;
   selectedMoveBallId?: string | null;
+  calledPocketId?: string | null;
+  replayComparison?: ReplayComparisonOverlay | null;
 }
 
 export class CanvasTableRenderer {
@@ -204,6 +212,11 @@ export class CanvasTableRenderer {
     // 4. Draw Trajectory Guides & Ghost Ball
     if (this.options.showTrajectories && prediction && isAiming) {
       this.drawTrajectories(prediction, table);
+    }
+
+    // 4b. Ghost Predicted vs Actual Shot Path Comparison Overlay
+    if (this.options.replayComparison?.show) {
+      this.drawReplayComparison(this.options.replayComparison);
     }
 
     // 5. Draw Balls
@@ -528,12 +541,67 @@ export class CanvasTableRenderer {
       ctx.stroke();
 
       // Brushed brass pocket plate trim
-      ctx.strokeStyle = '#C9A45A';
-      ctx.lineWidth = Math.max(1.5, 2.5 * this.scale);
+      ctx.strokeStyle = this.options.calledPocketId === pocket.id ? '#38BDF8' : '#C9A45A';
+      ctx.lineWidth =
+        this.options.calledPocketId === pocket.id
+          ? Math.max(2.5, 4.5 * this.scale)
+          : Math.max(1.5, 2.5 * this.scale);
       ctx.beginPath();
       ctx.arc(p.x, p.y, r * 1.06, 0, Math.PI * 2);
       ctx.stroke();
+
+      if (this.options.calledPocketId === pocket.id) {
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.45)';
+        ctx.lineWidth = Math.max(1.5, 3 * this.scale);
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r * 1.38, 0, Math.PI * 2);
+        ctx.stroke();
+      }
     }
+  }
+
+  private drawReplayComparison(comparison: ReplayComparisonOverlay): void {
+    const ctx = this.ctx;
+    const drawPoly = (
+      pts: Vector2D[],
+      stroke: string,
+      dashed: boolean,
+      endHollow: boolean
+    ) => {
+      if (pts.length < 2) return;
+      ctx.save();
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = Math.max(2.2, 6 * this.scale);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      if (dashed) {
+        ctx.setLineDash([Math.max(8, 18 * this.scale), Math.max(5, 10 * this.scale)]);
+      }
+      ctx.beginPath();
+      const p0 = this.toScreen(pts[0]);
+      ctx.moveTo(p0.x, p0.y);
+      for (let i = 1; i < pts.length; i++) {
+        const pi = this.toScreen(pts[i]);
+        ctx.lineTo(pi.x, pi.y);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      const last = this.toScreen(pts[pts.length - 1]);
+      ctx.beginPath();
+      ctx.arc(last.x, last.y, Math.max(4, 14 * this.scale), 0, Math.PI * 2);
+      if (endHollow) {
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = stroke;
+        ctx.fill();
+      }
+      ctx.restore();
+    };
+
+    drawPoly(comparison.predictedCuePath, 'rgba(56, 189, 248, 0.88)', true, true);
+    drawPoly(comparison.actualCuePath, 'rgba(251, 146, 60, 0.95)', false, false);
   }
 
   private drawTrajectories(prediction: TrajectoryPrediction, table: SnookerTable): void {

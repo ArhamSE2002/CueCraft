@@ -2,6 +2,7 @@
 import '../styles/global.css';
 import { siteConfig } from '../config/site';
 import CueCraftLogo from '../components/brand/CueCraftLogo.astro';
+import { AccountControl } from '../components/auth/AccountControl';
 
 interface Props {
   title?: string;
@@ -123,8 +124,9 @@ const useDarkChrome = isSimulator || darkScene;
           })}
         </nav>
 
-        {/* Primary CTA */}
-        <div class="flex items-center gap-2 sm:gap-3">
+        {/* Primary CTA + Persistent Player Profile / Streak */}
+        <div class="flex items-center gap-2 sm:gap-2.5">
+          <AccountControl client:load />
           {!isSimulator ? (
             <a
               href="/play"

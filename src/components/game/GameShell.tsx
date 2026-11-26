@@ -1,12 +1,22 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useGameStore, type CameraViewMode, type GameVariant } from '../../stores/gameStore';
-import { PhysicsEngine } from '../../engine/physics/PhysicsEngine';
-import { POOL_BALL_SPECS, type BallType } from '../../engine/physics/Ball';
+import { useAccountStore } from '../../stores/accountStore';
+import { PhysicsEngine, type ShotReplayData } from '../../engine/physics/PhysicsEngine';
+import { Ball, POOL_BALL_SPECS, type BallType } from '../../engine/physics/Ball';
+import {
+  MatchRulesEngine,
+  type MatchRulesSnapshot,
+} from '../../engine/rules/MatchRulesEngine';
+import { soundEngine, triggerHaptic } from '../../audio/SoundEngine';
 import { CanvasTableRenderer } from '../../renderers/2d/CanvasTableRenderer';
 import type { ThreeTableRenderer } from '../../renderers/3d/ThreeTableRenderer';
 import { Vector2D } from '../../engine/math/Vector2D';
 import { SpinSelector } from './SpinSelector';
 import { PowerControl } from './PowerControl';
+import { PullBackCueControl } from './PullBackCueControl';
+import { CueImpactCutaway } from './CueImpactCutaway';
+import { OnboardingChecklist } from './OnboardingChecklist';
+import { MatchHudPanel } from './MatchHudPanel';
 import { EquipmentLabPanel } from './EquipmentLabPanel';
 import { ShotLogPanel } from './ShotLogPanel';
 import { FrameCompleteModal } from './FrameCompleteModal';
@@ -48,6 +58,13 @@ import {
   Trash2,
   X,
   MoreHorizontal,
+  Volume2,
+  VolumeX,
+  Rewind,
+  GitCompare,
+  Maximize2,
+  Minimize2,
+  Smartphone,
 } from 'lucide-react';
 
 export const GameShell: React.FC = () => {
@@ -133,7 +150,33 @@ export const GameShell: React.FC = () => {
   const [mobileControlTab, setMobileControlTab] = useState<'aim' | 'power' | 'spin'>('aim');
   const [showMobileTools, setShowMobileTools] = useState(false);
 
+  // Rules Engine, Replay, Audio/Haptics, Tactile Pull-Back & HUD UX state
+  const matchRulesRef = useRef<MatchRulesEngine | null>(null);
+  const [matchSnapshot, setMatchSnapshot] = useState<MatchRulesSnapshot | null>(null);
+  const [audioMuted, setAudioMuted] = useState<boolean>(soundEngine.muted);
+  const [hapticsEnabled, setHapticsEnabled] = useState<boolean>(true);
+  const [pullPowerPreview, setPullPowerPreview] = useState<number | null>(null);
+  const [replayData, setReplayData] = useState<ShotReplayData | null>(null);
+  const [isReplaying, setIsReplaying] = useState<boolean>(false);
+  const [replaySpeed, setReplaySpeed] = useState<0.25 | 0.5 | 1.0>(0.5);
+  const [replayProgress, setReplayProgress] = useState<number>(0);
+  const [showCompareOverlay, setShowCompareOverlay] = useState<boolean>(false);
+  const [zenMode, setZenMode] = useState<boolean>(false);
+  const [dismissRotateHint, setDismissRotateHint] = useState<boolean>(false);
+  const [shakePx, setShakePx] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
   const touchTableActiveRef = useRef(false);
+  const replayTimeRef = useRef(0);
+  const replayActiveRef = useRef(false);
+  const replaySpeedRef = useRef<0.25 | 0.5 | 1.0>(0.5);
+  const replayDataRef = useRef<ShotReplayData | null>(null);
+  const hapticsRef = useRef(true);
+  const accountStore = useAccountStore();
+
+  replayActiveRef.current = isReplaying;
+  replaySpeedRef.current = replaySpeed;
+  replayDataRef.current = replayData;
+  hapticsRef.current = hapticsEnabled;
 
   const activeScenario = activeScenarioId
     ? TRAINING_SCENARIOS.find((s) => s.id === activeScenarioId) ?? null
@@ -174,7 +217,7 @@ export const GameShell: React.FC = () => {
         setThreeCameraMode(urlCam as CameraViewMode);
       }
       const urlRack = params.get('game') || params.get('rack');
-      if (urlRack === 'championship' || urlRack === 'snooker') {
+      if (urlRack === 'championship' || urlRack === 'snooker' || urlRack === 'play') {
         setGameVariant('snooker');
         setGameMode('championship');
       } else if (urlRack === '9ball') {
@@ -207,21 +250,118 @@ export const GameShell: React.FC = () => {
     const renderer = new CanvasTableRenderer(canvasRef.current);
     rendererRef.current = renderer;
 
+    // Hydrate saved user account, daily streak & equipment preset from IndexedDB
+    if (!useAccountStore.getState().initialized) {
+      void useAccountStore.getState().hydrate().then(() => {
+        const eq = useAccountStore.getState().equipment;
+        if (eq) {
+          setAudioMuted(eq.audioMuted);
+          setHapticsEnabled(eq.hapticsEnabled);
+        }
+      });
+    } else {
+      const eq = useAccountStore.getState().equipment;
+      if (eq) {
+        setAudioMuted(eq.audioMuted);
+        setHapticsEnabled(eq.hapticsEnabled);
+      }
+    }
+
+    engine.onCollision = (ev) => {
+      soundEngine.playBallCollision(ev.impulse);
+      triggerHaptic(Math.min(18, Math.max(8, Math.round(ev.impulse / 190))), hapticsRef.current);
+    };
+
+    engine.onCushionHit = (ball) => {
+      soundEngine.playCushionHit(ball.velocity.length());
+    };
+
     engine.onBallPotted = (ball, pocket) => {
-      addScore(ball.colorInfo.points);
+      soundEngine.playPocketDrop();
+      triggerHaptic(14, hapticsRef.current);
+      const st = useGameStore.getState();
+      if (st.gameVariant === 'practice' || st.activeScenarioId) {
+        addScore(ball.colorInfo.points);
+      }
       const ballName = ball.number ? `#${ball.number}` : ball.colorInfo.type.toUpperCase();
-      setLastShotSummary(`Potted ${ballName} (+${ball.colorInfo.points} pts) → ${pocket.name}`);
+      setLastShotSummary(`Potted ${ballName} → ${pocket.name}`);
     };
 
     engine.onFoul = (foul) => {
-      deductScore(foul.penalty);
-      setFoulNotice(foul.message);
-      setLastShotSummary(foul.message);
-      setTimeout(() => setFoulNotice(null), 5000);
+      soundEngine.playFoulTone();
+      const st = useGameStore.getState();
+      if (st.gameVariant === 'practice' || st.activeScenarioId) {
+        deductScore(foul.penalty);
+        setFoulNotice(foul.message);
+        setLastShotSummary(foul.message);
+        setTimeout(() => setFoulNotice(null), 5000);
+      }
     };
 
     engine.onShotCompleted = (log) => {
       addShotLog(log);
+      if (engine.lastShotReplay) {
+        setReplayData(engine.lastShotReplay);
+        setShowCompareOverlay(true);
+      }
+
+      const st = useGameStore.getState();
+      const rules = matchRulesRef.current;
+
+      if (rules && st.gameVariant !== 'practice' && !st.activeScenarioId) {
+        const res = rules.evaluateShot({
+          ballsAfter: engine.balls,
+          firstHitBall: log.firstHitBall ?? null,
+          pottedBalls: log.pottedBallsDetail ?? [],
+          cueInOff: Boolean(log.cueInOff),
+          cushionHitAfterFirstContact: Boolean(log.cushionHitAfterFirstContact),
+          shotNumber: log.id,
+        });
+
+        // Apply re-spotted balls (Snooker colors, foul 9-ball, foul 8-ball on break)
+        for (const rs of res.reSpots) {
+          const b = engine.balls.find((x) => x.id === rs.ballId);
+          if (b) {
+            b.potted = false;
+            b.pottedInPocket = null;
+            b.stop();
+            b.position = rs.position.clone();
+          }
+        }
+        engine.invalidatePredictionCache();
+
+        if (res.foul) {
+          soundEngine.playFoulTone();
+          setFoulNotice(res.notice);
+          setTimeout(() => setFoulNotice(null), 5000);
+        }
+        if (res.ballInHand) {
+          setInteractionMode('move');
+        }
+
+        setMatchSnapshot({
+          ...rules.state,
+          scores: [...rules.state.scores] as [number, number],
+          highBreaks: [...rules.state.highBreaks] as [number, number],
+          consecutiveFouls: [...rules.state.consecutiveFouls] as [number, number],
+          playerGroups: [...rules.state.playerGroups] as [null | 'solids' | 'stripes', null | 'solids' | 'stripes'],
+          onEightBall: [...rules.state.onEightBall] as [boolean, boolean],
+        });
+        setLastShotSummary(res.notice);
+
+        void useAccountStore.getState().recordShotSession({
+          shotsDelta: 1,
+          breakScore: Math.max(...rules.state.highBreaks),
+          matchWon: res.frameOver && res.winnerPlayer === 0,
+        });
+
+        if (res.frameOver) {
+          setShowFrameComplete(true);
+        }
+        return;
+      }
+
+      void useAccountStore.getState().recordShotSession({ shotsDelta: 1 });
       setLastShotSummary(
         `Done: Cue moved ${log.actualCueDistMm}mm (pred ${log.predictedCueDistMm}mm, Δ ${log.cueErrorMm}mm)${
           log.pottedList.length > 0 ? ` · Potted: ${log.pottedList.join(', ')}` : ''
@@ -241,16 +381,26 @@ export const GameShell: React.FC = () => {
         setCueElevationDeg(sc.recommendedElevationDeg);
         setLastShotSummary(`Lecture Challenge: ${sc.title}`);
       }
+      matchRulesRef.current = null;
+      setMatchSnapshot(null);
     } else if (initialUrlRack === '9ball') {
       engine.setupNineBallRack();
       setClothId('tournament-blue');
+      matchRulesRef.current = new MatchRulesEngine('9ball', engine.table);
+      setMatchSnapshot({ ...matchRulesRef.current.state });
     } else if (initialUrlRack === '8ball') {
       engine.setupEightBallRack();
       setClothId('crimson-tour');
-    } else if (initialUrlRack === 'championship' || initialUrlRack === 'snooker') {
+      matchRulesRef.current = new MatchRulesEngine('8ball', engine.table);
+      setMatchSnapshot({ ...matchRulesRef.current.state });
+    } else if (initialUrlRack === 'championship' || initialUrlRack === 'snooker' || initialUrlRack === 'play') {
       engine.setupChampionshipRack();
+      matchRulesRef.current = new MatchRulesEngine('snooker', engine.table);
+      setMatchSnapshot({ ...matchRulesRef.current.state });
     } else {
       engine.setupPracticeRack();
+      matchRulesRef.current = null;
+      setMatchSnapshot(null);
     }
 
     const handleResize = () => {
@@ -287,6 +437,25 @@ export const GameShell: React.FC = () => {
       threeRendererRef.current.setCueAndTipSpec(cue, tip);
     }
   }, [clothId, cushionId, cueId, tipId]);
+
+  // Persist equipment selections into user IndexedDB profile when modified
+  useEffect(() => {
+    if (accountStore.initialized) {
+      void accountStore.updateEquipment({ cueId, tipId, clothId, cushionId });
+    }
+  }, [cueId, tipId, clothId, cushionId]);
+
+  // Complete spin onboarding milestone automatically when player applies English/Follow/Screw
+  useEffect(() => {
+    if (
+      accountStore.initialized &&
+      accountStore.progress &&
+      !accountStore.progress.onboardingSteps.spin &&
+      (Math.abs(spinX) > 0.08 || Math.abs(spinY) > 0.08)
+    ) {
+      void accountStore.completeOnboardingStep('spin');
+    }
+  }, [spinX, spinY]);
 
   // ── Sync Zoom & Active Table ────────────────────────────────────────────────
   useEffect(() => {
@@ -383,6 +552,9 @@ export const GameShell: React.FC = () => {
     setGameVariant(variant);
     setShowAddBalls(false);
     setShowFrameComplete(false);
+    setReplayData(null);
+    setIsReplaying(false);
+    setShowCompareOverlay(false);
     setShotsCount(0);
     resetScore();
     if (!engineRef.current) return;
@@ -393,21 +565,27 @@ export const GameShell: React.FC = () => {
       engineRef.current.setupNineBallRack();
       setClothId('tournament-blue');
       setAimAngleRad(0);
-      setLastShotSummary('9ft Pro 9-Ball Pool table & diamond rack ready.');
+      matchRulesRef.current = new MatchRulesEngine('9ball', engineRef.current.table);
+      setMatchSnapshot({ ...matchRulesRef.current.state });
+      setLastShotSummary('9-Ball Match Rules active: hit lowest ball first · Push-Out & 3-Foul enforced.');
     } else if (variant === '8ball') {
       setGameMode('championship');
       setTableVariant('8ball');
       engineRef.current.setupEightBallRack();
       setClothId('crimson-tour');
       setAimAngleRad(0);
-      setLastShotSummary('8ft American 8-Ball table & 15-ball rack ready.');
+      matchRulesRef.current = new MatchRulesEngine('8ball', engineRef.current.table);
+      setMatchSnapshot({ ...matchRulesRef.current.state });
+      setLastShotSummary('8-Ball Match Rules active: Open table → Solids/Stripes → Call 8-Ball pocket.');
     } else if (variant === 'snooker') {
       setGameMode('championship');
       setTableVariant('snooker');
       engineRef.current.setupChampionshipRack();
       setClothId('club-standard');
       setAimAngleRad(0);
-      setLastShotSummary('12ft Championship 22-ball Snooker rack ready.');
+      matchRulesRef.current = new MatchRulesEngine('snooker', engineRef.current.table);
+      setMatchSnapshot({ ...matchRulesRef.current.state });
+      setLastShotSummary('Snooker Match Play active: Red → Nominated Color → Re-spot → Clearance.');
     } else {
       setGameMode('practice');
       setTableVariant('snooker');
@@ -415,7 +593,9 @@ export const GameShell: React.FC = () => {
       engineRef.current.setupPracticeRack();
       setClothId('club-standard');
       setAimAngleRad(0);
-      setLastShotSummary('Practice Snooker Lab initialized.');
+      matchRulesRef.current = null;
+      setMatchSnapshot(null);
+      setLastShotSummary('Practice Lab initialized.');
     }
 
     const activeCloth =
@@ -454,26 +634,75 @@ export const GameShell: React.FC = () => {
     setLastShotSummary('Cleared object balls — clean slate with cue ball ready.');
   };
 
-  // ── Strike (always reads fresh store state so keyboard/buttons never get stale!) ──
-  const handleStrike = useCallback(() => {
-    const state = useGameStore.getState();
-    if (!engineRef.current || state.isSimulating || !engineRef.current.isStationary()) return;
-    const struck = engineRef.current.strikeCueBall(
-      state.power,
-      state.aimAngleRad,
-      state.spinX,
-      state.spinY,
-      state.cueElevationDeg,
-      true
-    );
-    if (struck) {
-      state.setIsSimulating(true);
-      setShotsCount((c) => c + 1);
-      setLastShotSummary(
-        `Struck (${state.power}% power, Y=${state.spinY.toFixed(2)}, X=${state.spinX.toFixed(2)})`
-      );
-    }
+  // ── Strike (supports precision Strike button & tactile Pull-Back Cue release) ──
+  const triggerBreakShake = useCallback((shotPower: number) => {
+    if (shotPower < 75) return;
+    threeRendererRef.current?.triggerBreakShake(shotPower);
+    let step = 0;
+    const shakeTimer = window.setInterval(() => {
+      step++;
+      if (step > 7) {
+        window.clearInterval(shakeTimer);
+        setShakePx({ x: 0, y: 0 });
+        return;
+      }
+      const amp = Math.max(0.5, 2.2 * (1 - step / 8));
+      setShakePx({
+        x: (Math.random() - 0.5) * amp * 2,
+        y: (Math.random() - 0.5) * amp * 2,
+      });
+    }, 24);
   }, []);
+
+  const handleStrikeWithPower = useCallback(
+    (overridePower?: number) => {
+      const state = useGameStore.getState();
+      const eng = engineRef.current;
+      if (!eng || state.isSimulating || !eng.isStationary()) return;
+
+      const shotPower = overridePower ?? state.power;
+      if (overridePower !== undefined) {
+        state.setPower(overridePower);
+      }
+
+      if (matchRulesRef.current && state.gameVariant !== 'practice' && !state.activeScenarioId) {
+        matchRulesRef.current.capturePreShot(eng.balls);
+        matchRulesRef.current.clearBallInHand();
+        setInteractionMode('aim');
+      }
+
+      setIsReplaying(false);
+      setReplayProgress(0);
+      const struck = eng.strikeCueBall(
+        shotPower,
+        state.aimAngleRad,
+        state.spinX,
+        state.spinY,
+        state.cueElevationDeg,
+        true
+      );
+      if (struck) {
+        const activeTip = TIP_CATALOG.find((t) => t.id === state.tipId) ?? TIP_CATALOG[1];
+        const tipHardnessNum =
+          activeTip.hardness === 'Hard' ? 0.9 : activeTip.hardness === 'Soft' ? 0.3 : 0.6;
+        soundEngine.playCueStrike(shotPower, tipHardnessNum);
+        triggerHaptic(shotPower >= 75 ? 20 : 10, hapticsRef.current);
+        triggerBreakShake(shotPower);
+        void useAccountStore.getState().completeOnboardingStep('strike');
+
+        state.setIsSimulating(true);
+        setShotsCount((c) => c + 1);
+        setLastShotSummary(
+          `Struck (${shotPower}% power, Y=${state.spinY.toFixed(2)}, X=${state.spinX.toFixed(2)})`
+        );
+      }
+    },
+    [setInteractionMode, triggerBreakShake]
+  );
+
+  const handleStrike = useCallback(() => {
+    handleStrikeWithPower();
+  }, [handleStrikeWithPower]);
 
   // ── Keyboard shortcuts (reads live store state cleanly; Space always works even after sliders!) ──
   useEffect(() => {
@@ -554,24 +783,60 @@ export const GameShell: React.FC = () => {
       const threeRenderer = threeRendererRef.current;
 
       if (engine) {
-        if (engine.isSimulating) {
+        let renderBalls = engine.balls;
+        let animatingVisualOnly = false;
+
+        // Instant Slow-Mo Replay playback without mutating live table positions
+        if (replayActiveRef.current && replayDataRef.current && replayDataRef.current.frames.length > 0) {
+          const frames = replayDataRef.current.frames;
+          const totalDur = Math.max(0.25, frames[frames.length - 1].timeSec);
+          replayTimeRef.current += dt * replaySpeedRef.current;
+          if (replayTimeRef.current >= totalDur) {
+            replayTimeRef.current = totalDur;
+            setIsReplaying(false);
+          }
+          setReplayProgress(Math.min(1, replayTimeRef.current / totalDur));
+
+          let targetFrame = frames[frames.length - 1];
+          for (let i = 0; i < frames.length; i++) {
+            if (frames[i].timeSec >= replayTimeRef.current) {
+              targetFrame = frames[i];
+              break;
+            }
+          }
+          renderBalls = engine.balls.map((orig) => {
+            const snap = targetFrame.balls.find((f) => f.id === orig.id);
+            if (!snap) return orig;
+            const clone = orig.clone();
+            clone.position = new Vector2D(snap.x, snap.y);
+            clone.potted = snap.potted;
+            return clone;
+          });
+          animatingVisualOnly = true;
+        } else if (engine.isSimulating) {
           engine.step(dt);
           if (!engine.isSimulating) {
             setIsSimulating(false);
+            const activeSc = useGameStore.getState().activeScenarioId;
             const remainingObjectBalls = engine.balls.filter(
               (b) => b.type !== 'cue' && !b.potted
             );
             if (remainingObjectBalls.length === 0) {
-              setShowFrameComplete(true);
+              if (activeSc) {
+                void useAccountStore.getState().completeDrill(activeSc);
+              }
+              if (useGameStore.getState().gameVariant === 'practice' || activeSc) {
+                setShowFrameComplete(true);
+              }
             }
           }
         }
 
         let prediction = null;
-        if (!engine.isSimulating) {
+        if (!engine.isSimulating && !animatingVisualOnly) {
           prediction = engine.calculateTrajectory(
             aimAngleRad,
-            power,
+            pullPowerPreview ?? power,
             spinX,
             spinY,
             cueElevationDeg,
@@ -580,29 +845,41 @@ export const GameShell: React.FC = () => {
           setCutAngleDeg(prediction.targetBall ? Math.round(prediction.angleDegrees) : 0);
         }
 
+        const comparisonPayload =
+          showCompareOverlay && replayDataRef.current
+            ? {
+                predictedCuePath: replayDataRef.current.predictedCuePath,
+                actualCuePath: replayDataRef.current.actualCuePath,
+                show: true,
+              }
+            : null;
+
         if (renderMode === '2d' && renderer) {
           renderer.options.showTrajectories = showTrajectories;
           renderer.options.showGhostBall = showGhostBall;
           renderer.options.selectedMoveBallId = interactionMode === 'move' ? draggedBallId2D : null;
+          renderer.options.calledPocketId = matchSnapshot?.calledPocketId ?? null;
+          renderer.options.replayComparison = comparisonPayload;
           renderer.render(
             engine.table,
-            engine.balls,
+            renderBalls,
             prediction,
             aimAngleRad,
-            power,
-            !engine.isSimulating,
+            pullPowerPreview ?? power,
+            !engine.isSimulating && !animatingVisualOnly,
             zoomLevel,
             panOffset
           );
         }
 
         if (renderMode === '3d' && threeRenderer) {
+          threeRenderer.replayComparison = comparisonPayload;
           threeRenderer.render(
-            engine.balls,
+            renderBalls,
             prediction,
             aimAngleRad,
-            power,
-            !engine.isSimulating,
+            pullPowerPreview ?? power,
+            !engine.isSimulating && !animatingVisualOnly,
             cueElevationDeg,
             engine.table
           );
@@ -632,6 +909,9 @@ export const GameShell: React.FC = () => {
     cushionId,
     cueId,
     tipId,
+    pullPowerPreview,
+    showCompareOverlay,
+    matchSnapshot,
   ]);
 
   const handleWheel = (e: React.WheelEvent) => {
@@ -687,7 +967,15 @@ export const GameShell: React.FC = () => {
       const cue = engineRef.current.cueBall;
       if (!cue || cue.potted) return false;
       const delta = tablePos.sub(cue.position);
-      if (delta.lengthSq() > 100) setAimAngleRad(delta.angle());
+      if (delta.lengthSq() > 100) {
+        setAimAngleRad(delta.angle());
+        if (
+          useAccountStore.getState().initialized &&
+          !useAccountStore.getState().progress?.onboardingSteps.aim
+        ) {
+          void useAccountStore.getState().completeOnboardingStep('aim');
+        }
+      }
       return true;
     }
   };
@@ -814,33 +1102,34 @@ export const GameShell: React.FC = () => {
 
       <div className="flex flex-col w-full min-h-full lg:h-full lg:max-h-full lg:overflow-hidden bg-[#06090C] text-ivory-text select-none">
         {/* ═══════════════════════════════════════════════════════════════
-            TOP BROADCAST TELEMETRY BAR
+            TOP BROADCAST TELEMETRY BAR (Collapsible via Zen Mode)
         ═══════════════════════════════════════════════════════════════ */}
-        <header className="relative z-30 flex items-center justify-between gap-2 px-3 sm:px-4 py-2 bg-[#090D13]/95 backdrop-blur-xl border-b border-white/[0.08] shrink-0">
-          <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0">
-            {/* Game Rules & Table Variant Selector */}
-            <div className="flex items-center bg-[#06090C] p-0.5 rounded-full border border-white/[0.08] overflow-x-auto max-w-[42vw] sm:max-w-none">
-              {(
-                [
-                  { id: 'practice', label: 'Practice' },
-                  { id: 'snooker', label: 'Snooker' },
-                  { id: '9ball', label: '9-Ball' },
-                  { id: '8ball', label: '8-Ball' },
-                ] as const
-              ).map((g) => (
-                <button
-                  key={g.id}
-                  onClick={() => handleGameVariantChange(g.id)}
-                  className={`px-2 sm:px-2.5 py-1 rounded-full text-[10px] sm:text-[11px] font-medium whitespace-nowrap transition-all ${
-                    gameVariant === g.id && !activeScenarioId
-                      ? 'bg-emerald-bright text-[#05080C] font-bold shadow-sm'
-                      : 'text-slate-300 hover:text-white'
-                  }`}
-                >
-                  {g.label}
-                </button>
-              ))}
-            </div>
+        {!zenMode && (
+          <header className="relative z-30 flex items-center justify-between gap-2 px-3 sm:px-4 py-2 bg-[#090D13]/95 backdrop-blur-xl border-b border-white/[0.08] shrink-0">
+            <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0">
+              {/* Game Rules & Table Variant Selector: Practice vs Play (Snooker) vs 9-Ball vs 8-Ball */}
+              <div className="flex items-center bg-[#06090C] p-0.5 rounded-full border border-white/[0.08] overflow-x-auto max-w-[44vw] sm:max-w-none">
+                {(
+                  [
+                    { id: 'practice', label: 'Practice' },
+                    { id: 'snooker', label: 'Play' },
+                    { id: '9ball', label: '9-Ball' },
+                    { id: '8ball', label: '8-Ball' },
+                  ] as const
+                ).map((g) => (
+                  <button
+                    key={g.id}
+                    onClick={() => handleGameVariantChange(g.id)}
+                    className={`px-2 sm:px-2.5 py-1 rounded-full text-[10px] sm:text-[11px] font-medium whitespace-nowrap transition-all ${
+                      gameVariant === g.id && !activeScenarioId
+                        ? 'bg-emerald-bright text-[#05080C] font-bold shadow-sm'
+                        : 'text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    {g.label}
+                  </button>
+                ))}
+              </div>
 
             {/* Aim vs Move Balls Toggle */}
             <div className="flex items-center bg-[#06090C] p-0.5 rounded-full border border-white/[0.08] shrink-0">
@@ -1049,6 +1338,23 @@ export const GameShell: React.FC = () => {
             </div>
 
             <button
+              onClick={() => {
+                const next = !audioMuted;
+                setAudioMuted(next);
+                soundEngine.muted = next;
+                void useAccountStore.getState().updateEquipment({ audioMuted: next });
+              }}
+              className={`hidden md:flex p-1.5 rounded-full transition-colors border ${
+                audioMuted
+                  ? 'text-slate-500 border-white/[0.08] bg-[#06090C]'
+                  : 'text-emerald-bright border-emerald-bright/30 bg-emerald-500/10'
+              }`}
+              title={audioMuted ? 'Unmute Physics Sound' : 'Mute Physics Sound'}
+            >
+              {audioMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+            </button>
+
+            <button
               onClick={() => setShowShortcuts(true)}
               className="hidden md:flex p-1.5 rounded-full text-ivory-muted hover:text-ivory-text hover:bg-white/[0.08] transition-colors border border-white/[0.08]"
               title="Keyboard shortcuts (?)"
@@ -1074,7 +1380,32 @@ export const GameShell: React.FC = () => {
               </button>
 
               {showMobileTools && (
-                <div className="absolute right-0 top-full mt-2 w-52 rounded-2xl bg-[#0F151B]/98 backdrop-blur-xl border border-white/15 shadow-2xl p-2 z-50 flex flex-col gap-1 font-sans text-xs">
+                <div className="absolute right-0 top-full mt-2 w-56 rounded-2xl bg-[#0F151B]/98 backdrop-blur-xl border border-white/15 shadow-2xl p-2 z-50 flex flex-col gap-1 font-sans text-xs">
+                  <button
+                    onClick={() => {
+                      const next = !audioMuted;
+                      setAudioMuted(next);
+                      soundEngine.muted = next;
+                      void useAccountStore.getState().updateEquipment({ audioMuted: next });
+                      setShowMobileTools(false);
+                    }}
+                    className="flex items-center gap-2 w-full px-3 py-2 rounded-xl hover:bg-white/[0.08] text-left text-white"
+                  >
+                    {audioMuted ? <VolumeX className="w-3.5 h-3.5 text-slate-400" /> : <Volume2 className="w-3.5 h-3.5 text-emerald-bright" />}
+                    <span>{audioMuted ? 'Unmute Sound' : 'Sound Effects: On'}</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      const next = !hapticsEnabled;
+                      setHapticsEnabled(next);
+                      void useAccountStore.getState().updateEquipment({ hapticsEnabled: next });
+                      setShowMobileTools(false);
+                    }}
+                    className="flex items-center gap-2 w-full px-3 py-2 rounded-xl hover:bg-white/[0.08] text-left text-white"
+                  >
+                    <Smartphone className="w-3.5 h-3.5 text-sky-400" />
+                    <span>{hapticsEnabled ? 'Haptics: On' : 'Haptics: Off'}</span>
+                  </button>
                   <button
                     onClick={() => {
                       handleResetTable();
@@ -1120,11 +1451,86 @@ export const GameShell: React.FC = () => {
             </div>
           </div>
         </header>
+        )}
+
+        {/* Active Match Rules Bar (Play [Snooker] / 9-Ball / 8-Ball) */}
+        {!zenMode && matchSnapshot && gameVariant !== 'practice' && !activeScenario && engineRef.current && (
+          <MatchHudPanel
+            snapshot={matchSnapshot}
+            pockets={engineRef.current.table.pockets}
+            onNominateColor={(color) => {
+              matchRulesRef.current?.nominateSnookerColor(color);
+              if (matchRulesRef.current) setMatchSnapshot({ ...matchRulesRef.current.state });
+            }}
+            onSelectCalledPocket={(pocketId) => {
+              matchRulesRef.current?.setCalledPocket(pocketId || null);
+              if (matchRulesRef.current) setMatchSnapshot({ ...matchRulesRef.current.state });
+            }}
+            onCallMissReplay={() => {
+              const restored = matchRulesRef.current?.callMissAndReplay();
+              if (restored && engineRef.current && matchRulesRef.current) {
+                engineRef.current.balls = restored.map(
+                  (b) => new Ball(b.id, b.type, new Vector2D(b.x, b.y), engineRef.current!.table.ballRadius, b.number)
+                );
+                restored.forEach((orig, idx) => {
+                  engineRef.current!.balls[idx].potted = orig.potted;
+                });
+                engineRef.current.invalidatePredictionCache();
+                setMatchSnapshot({ ...matchRulesRef.current.state });
+                setLastShotSummary(matchRulesRef.current.state.statusBanner);
+              }
+            }}
+            onDeclarePushOut={() => {
+              matchRulesRef.current?.declareNineBallPushOut();
+              if (matchRulesRef.current) setMatchSnapshot({ ...matchRulesRef.current.state });
+            }}
+            onAcceptPushOut={() => {
+              matchRulesRef.current?.acceptNineBallPushOut();
+              if (matchRulesRef.current) setMatchSnapshot({ ...matchRulesRef.current.state });
+            }}
+            onPassBackPushOut={() => {
+              matchRulesRef.current?.resolveNineBallPushOutPassBack();
+              if (matchRulesRef.current) setMatchSnapshot({ ...matchRulesRef.current.state });
+            }}
+          />
+        )}
 
         {/* ═══════════════════════════════════════════════════════════════
             SIMULATION VIEWPORT
         ═══════════════════════════════════════════════════════════════ */}
-        <main className="relative w-full bg-[#040709] flex items-center justify-center p-1.5 sm:p-2.5 h-[50vh] min-h-[285px] sm:h-[58vh] lg:h-auto lg:flex-1 lg:min-h-0 lg:overflow-hidden">
+        <main
+          className="relative w-full bg-[#040709] flex items-center justify-center p-1.5 sm:p-2.5 h-[50vh] min-h-[285px] sm:h-[58vh] lg:h-auto lg:flex-1 lg:min-h-0 lg:overflow-hidden"
+          style={
+            shakePx.x || shakePx.y
+              ? { transform: `translate(${shakePx.x.toFixed(2)}px, ${shakePx.y.toFixed(2)}px)` }
+              : undefined
+          }
+        >
+          {/* Real-Time Cue Ball Impact Cutaway HUD (follows aiming without looking away) */}
+          {!activeScenario && (
+            <div className="absolute top-2.5 left-2.5 z-20 hidden sm:block">
+              <CueImpactCutaway
+                spinX={spinX}
+                spinY={spinY}
+                cueElevationDeg={cueElevationDeg}
+                tipId={tipId}
+              />
+            </div>
+          )}
+
+          {/* Mobile Portrait Landscape Suggestion Chip */}
+          {!dismissRotateHint && (
+            <button
+              type="button"
+              onClick={() => setDismissRotateHint(true)}
+              className="sm:hidden absolute top-2 left-2 z-20 flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#090D13]/90 border border-white/15 text-[10px] font-mono text-sky-300 shadow"
+              title="Tap to dismiss"
+            >
+              <Smartphone className="w-3 h-3 rotate-90" />
+              <span>Rotate for Pro View</span>
+              <X className="w-2.5 h-2.5 text-slate-400" />
+            </button>
+          )}
           {/* Active Lecture / Lesson Scenario Challenge Banner */}
           {activeScenario && (
             <div className="absolute top-3 left-3 z-20 max-w-md bg-surface-card/92 backdrop-blur border border-brass-primary/40 rounded-xl p-2.5 shadow-xl text-xs">
@@ -1169,10 +1575,73 @@ export const GameShell: React.FC = () => {
             </div>
           )}
 
-          {/* Shot summary */}
-          {lastShotSummary && !isSimulating && (
-            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 px-3 py-1 rounded-full bg-surface-card/85 backdrop-blur border border-surface-subtle text-[10px] font-mono text-ivory-muted tracking-wide whitespace-nowrap max-w-[92vw] overflow-hidden text-ellipsis">
-              {lastShotSummary}
+          {/* Shot summary + Instant Slow-Mo Replay & Ghost Comparison Controls */}
+          {!isSimulating && (replayData || lastShotSummary) && (
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 flex flex-wrap items-center justify-center gap-1.5 px-2.5 py-1 rounded-full bg-[#090D13]/92 backdrop-blur-md border border-white/10 shadow-xl max-w-[94vw]">
+              {lastShotSummary && (
+                <span className="text-[10px] font-mono text-slate-300 truncate max-w-[200px] sm:max-w-xs px-1">
+                  {lastShotSummary}
+                </span>
+              )}
+              {replayData && replayData.frames.length > 2 && (
+                <div className="flex items-center gap-1 pl-1.5 border-l border-white/10 font-mono text-[10px]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isReplaying) {
+                        setIsReplaying(false);
+                      } else {
+                        replayTimeRef.current = 0;
+                        setReplayProgress(0);
+                        setIsReplaying(true);
+                      }
+                    }}
+                    className={`flex items-center gap-1 px-2 py-0.5 rounded-full font-bold transition-colors ${
+                      isReplaying
+                        ? 'bg-amber-400 text-[#05080C]'
+                        : 'bg-emerald-bright/20 hover:bg-emerald-bright/30 text-emerald-bright'
+                    }`}
+                  >
+                    <Rewind className="w-3 h-3" />
+                    <span>{isReplaying ? `${Math.round(replayProgress * 100)}% Stop` : 'Replay'}</span>
+                  </button>
+
+                  {([0.25, 0.5, 1.0] as const).map((spd) => (
+                    <button
+                      key={spd}
+                      type="button"
+                      onClick={() => {
+                        setReplaySpeed(spd);
+                        if (!isReplaying) {
+                          replayTimeRef.current = 0;
+                          setIsReplaying(true);
+                        }
+                      }}
+                      className={`px-1.5 py-0.5 rounded-full transition-colors ${
+                        replaySpeed === spd
+                          ? 'bg-sky-400 text-[#05080C] font-bold'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {spd}x
+                    </button>
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={() => setShowCompareOverlay((v) => !v)}
+                    className={`flex items-center gap-1 px-2 py-0.5 rounded-full border transition-colors ${
+                      showCompareOverlay
+                        ? 'bg-sky-400/20 border-sky-400/50 text-sky-300 font-bold'
+                        : 'border-white/10 text-slate-400 hover:text-white'
+                    }`}
+                    title="Overlay Cyan Predicted Cue Path vs Amber Actual Path"
+                  >
+                    <GitCompare className="w-3 h-3" />
+                    <span className="hidden sm:inline">Ghost vs Actual</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
           {isSimulating && (
@@ -1181,8 +1650,27 @@ export const GameShell: React.FC = () => {
             </div>
           )}
 
-          {/* Floating Zoom & 3D Camera Angles Toolbar */}
+          {/* First-Time Visitor 3-Step Interactive Onboarding Checklist */}
+          {accountStore.initialized &&
+            accountStore.progress &&
+            !accountStore.progress.onboardingDismissed && (
+              <OnboardingChecklist
+                steps={accountStore.progress.onboardingSteps}
+                onDismiss={() => void accountStore.dismissOnboarding()}
+              />
+            )}
+
+          {/* Floating Zoom, Zen Toggle & 3D Camera Angles Toolbar */}
           <div className="absolute top-3 right-3 z-20 flex flex-wrap items-center justify-end gap-1 bg-[#0B1014]/85 backdrop-blur-md border border-white/10 px-2 py-1 rounded-full text-xs shadow-xl max-w-[95vw]">
+            <button
+              onClick={() => setZenMode((v) => !v)}
+              className={`p-1 rounded hover:bg-surface-elevated transition-colors ${
+                zenMode ? 'text-emerald-bright' : 'text-ivory-muted hover:text-ivory-text'
+              }`}
+              title={zenMode ? 'Exit Full-Bleed Table Mode' : 'Collapse Header Bars for Full-Bleed Table'}
+            >
+              {zenMode ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+            </button>
             <button onClick={zoomIn} className="p-1 rounded hover:bg-surface-elevated text-ivory-muted hover:text-ivory-text" title="Zoom In">
               <ZoomIn className="w-3.5 h-3.5" />
             </button>
@@ -1370,18 +1858,26 @@ export const GameShell: React.FC = () => {
                 </button>
               </div>
 
-              <button
-                onClick={handleStrike}
-                disabled={isSimulating}
-                className={`flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-full font-bold text-xs tracking-wider uppercase transition-all shadow-lg shrink-0 ${
-                  isSimulating
-                    ? 'bg-surface-subtle text-ivory-faint cursor-not-allowed'
-                    : 'bg-emerald-bright hover:bg-emerald text-[#05080C] hover:text-white shadow-brass-glow active:scale-95'
-                }`}
-              >
-                <Play className="w-3.5 h-3.5 fill-current" />
-                {isSimulating ? 'Rolling…' : 'Strike'}
-              </button>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <PullBackCueControl
+                  disabled={isSimulating}
+                  onPullProgress={(p) => setPullPowerPreview(p)}
+                  onReleaseStrike={(p) => handleStrikeWithPower(p)}
+                />
+
+                <button
+                  onClick={handleStrike}
+                  disabled={isSimulating}
+                  className={`flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-full font-bold text-xs tracking-wider uppercase transition-all shadow-lg shrink-0 ${
+                    isSimulating
+                      ? 'bg-surface-subtle text-ivory-faint cursor-not-allowed'
+                      : 'bg-emerald-bright hover:bg-emerald text-[#05080C] hover:text-white shadow-brass-glow active:scale-95'
+                  }`}
+                >
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  {isSimulating ? 'Rolling…' : 'Strike'}
+                </button>
+              </div>
             </div>
 
             {/* Segmented Tab Bar */}
@@ -1577,20 +2073,27 @@ export const GameShell: React.FC = () => {
             <PowerControl />
             <SpinSelector />
 
-            {/* Action Buttons */}
+            {/* Action Buttons: Tactile Pull-Back Cue + Precision Strike */}
             <div className="flex flex-col gap-2 items-end">
-              <button
-                onClick={handleStrike}
-                disabled={isSimulating}
-                className={`flex items-center justify-center gap-2 px-7 py-3 rounded-full font-bold text-xs tracking-wider uppercase transition-all shadow-lg w-full ${
-                  isSimulating
-                    ? 'bg-surface-subtle text-ivory-faint cursor-not-allowed'
-                    : 'bg-emerald-bright hover:bg-emerald text-[#05080C] hover:text-white shadow-brass-glow active:scale-95'
-                }`}
-              >
-                <Play className="w-3.5 h-3.5 fill-current" />
-                {isSimulating ? 'Simulating…' : 'Strike'}
-              </button>
+              <div className="flex items-center gap-2 w-full">
+                <PullBackCueControl
+                  disabled={isSimulating}
+                  onPullProgress={(p) => setPullPowerPreview(p)}
+                  onReleaseStrike={(p) => handleStrikeWithPower(p)}
+                />
+                <button
+                  onClick={handleStrike}
+                  disabled={isSimulating}
+                  className={`flex items-center justify-center gap-2 px-6 py-3 rounded-full font-bold text-xs tracking-wider uppercase transition-all shadow-lg flex-1 ${
+                    isSimulating
+                      ? 'bg-surface-subtle text-ivory-faint cursor-not-allowed'
+                      : 'bg-emerald-bright hover:bg-emerald text-[#05080C] hover:text-white shadow-brass-glow active:scale-95'
+                  }`}
+                >
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  {isSimulating ? 'Simulating…' : 'Strike'}
+                </button>
+              </div>
 
               <div className="flex items-center gap-1.5">
                 <button

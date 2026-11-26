@@ -9,6 +9,7 @@ import {
   getScenarioDemoSteps,
   getScenarioTier,
 } from '../../config/scenarios';
+import { useAccountStore } from '../../stores/accountStore';
 import {
   Play,
   Pause,
@@ -53,6 +54,11 @@ export const LessonPlayLab: React.FC<LessonPlayLabProps> = ({ scenarioSlug }) =>
   const touchTableActiveRef = useRef(false);
   const phaseTimerRef = useRef(0);
   const autoShotFiredRef = useRef(false);
+
+  // Persist lecture visit + streak into user database
+  useEffect(() => {
+    void useAccountStore.getState().completeLecture(scenario.lectureSlug);
+  }, [scenario.lectureSlug]);
 
   // Sync live values into refs so single stable RAF loop always reads fresh state
   const stateRef = useRef({

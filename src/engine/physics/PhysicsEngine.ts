@@ -79,6 +79,29 @@ export interface ShotTelemetryLog {
   actualTargetPotted: boolean;
   pottedList: string[];
   foulMessage: string | null;
+  firstHitBall?: { id: string; type: Ball['type']; number?: number } | null;
+  pottedBallsDetail?: Array<{ id: string; type: Ball['type']; number?: number; pocketId: string | null }>;
+  cueInOff?: boolean;
+  cushionHitAfterFirstContact?: boolean;
+}
+
+export interface ReplayBallFrame {
+  id: string;
+  x: number;
+  y: number;
+  potted: boolean;
+}
+
+export interface ReplayFrame {
+  timeSec: number;
+  balls: ReplayBallFrame[];
+}
+
+export interface ShotReplayData {
+  frames: ReplayFrame[];
+  predictedCuePath: Vector2D[];
+  actualCuePath: Vector2D[];
+  predictedTargetPath: Vector2D[];
 }
 
 export class PhysicsEngine {
@@ -97,13 +120,15 @@ export class PhysicsEngine {
 
   public onBallPotted?: (ball: Ball, pocket: Pocket) => void;
   public onCollision?: (event: CollisionEvent) => void;
+  public onCushionHit?: (ball: Ball, contactPoint: Vector2D) => void;
   public onFoul?: (foul: FoulEvent) => void;
   public onShotCompleted?: (log: ShotTelemetryLog) => void;
+  public lastShotReplay: ShotReplayData | null = null;
 
   // Fixed-timestep accumulator for frame-rate independence
   private dtAccumulator: number = 0;
 
-  // Active shot verification tracking
+  // Active shot verification & replay tracking
   private activeShotTracking: {
     id: number;
     power: number;
@@ -117,6 +142,14 @@ export class PhysicsEngine {
     actualCueDistMm: number;
     pottedList: string[];
     foulMessage: string | null;
+    firstHitBall: { id: string; type: Ball['type']; number?: number } | null;
+    pottedBallsDetail: Array<{ id: string; type: Ball['type']; number?: number; pocketId: string | null }>;
+    cueInOff: boolean;
+    cushionHitAfterFirstContact: boolean;
+    replayFrames: ReplayFrame[];
+    actualCueSamples: Vector2D[];
+    simTimeSec: number;
+    lastSampleDistPos: Vector2D;
   } | null = null;
   private shotCounter: number = 0;
 
@@ -257,6 +290,15 @@ export class PhysicsEngine {
 
     if (trackTelemetry) {
       this.shotCounter++;
+      const initialReplayFrame: ReplayFrame = {
+        timeSec: 0,
+        balls: this.balls.map((b) => ({
+          id: b.id,
+          x: b.position.x,
+          y: b.position.y,
+          potted: b.potted,
+        })),
+      };
       this.activeShotTracking = {
         id: this.shotCounter,
         power,
@@ -270,6 +312,14 @@ export class PhysicsEngine {
         actualCueDistMm: 0,
         pottedList: [],
         foulMessage: null,
+        firstHitBall: null,
+        pottedBallsDetail: [],
+        cueInOff: false,
+        cushionHitAfterFirstContact: false,
+        replayFrames: [initialReplayFrame],
+        actualCueSamples: [cue.position.clone()],
+        simTimeSec: 0,
+        lastSampleDistPos: cue.position.clone(),
       };
     }
 
@@ -349,6 +399,12 @@ export class PhysicsEngine {
         Cushions.enforceTableBounds(ball, this.cushionConfig, this.table);
         if (hitCushion) {
           const contactVec = new Vector2D(contactPt.x, contactPt.y);
+          if (emitCallbacks) {
+            if (this.onCushionHit) this.onCushionHit(ball, contactVec);
+            if (this.activeShotTracking && this.activeShotTracking.firstHitBall) {
+              this.activeShotTracking.cushionHitAfterFirstContact = true;
+            }
+          }
           if (ball.type === 'cue' && onCueCushionHit) onCueCushionHit(contactVec);
           if (ball.type !== 'cue' && onBallCushionHit) onBallCushionHit(ball.id, contactVec);
         }
@@ -358,8 +414,25 @@ export class PhysicsEngine {
       for (let i = 0; i < this.balls.length; i++) {
         for (let j = i + 1; j < this.balls.length; j++) {
           const event = Collisions.resolveBallCollision(this.balls[i], this.balls[j]);
-          if (event && emitCallbacks && this.onCollision) {
-            this.onCollision(event);
+          if (event && emitCallbacks) {
+            if (this.activeShotTracking && !this.activeShotTracking.firstHitBall) {
+              if (event.ballA.type === 'cue' && event.ballB.type !== 'cue') {
+                this.activeShotTracking.firstHitBall = {
+                  id: event.ballB.id,
+                  type: event.ballB.type,
+                  number: event.ballB.number,
+                };
+              } else if (event.ballB.type === 'cue' && event.ballA.type !== 'cue') {
+                this.activeShotTracking.firstHitBall = {
+                  id: event.ballA.id,
+                  type: event.ballA.type,
+                  number: event.ballA.number,
+                };
+              }
+            }
+            if (this.onCollision) {
+              this.onCollision(event);
+            }
           }
         }
       }
@@ -378,6 +451,7 @@ export class PhysicsEngine {
                 const msg = `FOUL: In-off into ${pocket.name}. Penalty: -4 points. Cue ball placed back in baulk.`;
                 if (this.activeShotTracking) {
                   this.activeShotTracking.foulMessage = msg;
+                  this.activeShotTracking.cueInOff = true;
                 }
                 if (this.onFoul) {
                   this.onFoul({ type: 'in-off', penalty: 4, message: msg });
@@ -395,6 +469,12 @@ export class PhysicsEngine {
               if (emitCallbacks) {
                 if (this.activeShotTracking) {
                   this.activeShotTracking.pottedList.push(ball.type.toUpperCase());
+                  this.activeShotTracking.pottedBallsDetail.push({
+                    id: ball.id,
+                    type: ball.type,
+                    number: ball.number,
+                    pocketId: pocket.id,
+                  });
                 }
                 if (this.onBallPotted) {
                   this.onBallPotted(ball, pocket);
@@ -409,6 +489,29 @@ export class PhysicsEngine {
       // 5. Apply cloth friction (2D sliding & rolling)
       for (const ball of this.balls) {
         Cloth.applyFriction(ball, subDt, this.clothConfig);
+      }
+    }
+
+    // Record deterministic replay frame & actual cue polyline cleanly at 60Hz fixed steps
+    if (emitCallbacks && this.activeShotTracking) {
+      this.activeShotTracking.simTimeSec += fixedDt;
+      if (this.activeShotTracking.replayFrames.length < 720) {
+        this.activeShotTracking.replayFrames.push({
+          timeSec: Number(this.activeShotTracking.simTimeSec.toFixed(3)),
+          balls: this.balls.map((b) => ({
+            id: b.id,
+            x: b.position.x,
+            y: b.position.y,
+            potted: b.potted,
+          })),
+        });
+      }
+      const liveCue = this.cueBall;
+      if (liveCue && !liveCue.potted && !this.activeShotTracking.cueInOff) {
+        if (liveCue.position.distanceTo(this.activeShotTracking.lastSampleDistPos) >= 14) {
+          this.activeShotTracking.actualCueSamples.push(liveCue.position.clone());
+          this.activeShotTracking.lastSampleDistPos = liveCue.position.clone();
+        }
       }
     }
 
@@ -462,6 +565,35 @@ export class PhysicsEngine {
       }
     }
 
+    // Build Ghost vs Actual comparison polylines for post-shot replay
+    const predictedCuePoints: Vector2D[] = [];
+    if (pred) {
+      pred.cuePath.forEach((seg, idx) => {
+        if (idx === 0) predictedCuePoints.push(seg.start.clone());
+        predictedCuePoints.push(seg.end.clone());
+      });
+      pred.cueDeflectionPath.forEach((seg, idx) => {
+        if (predictedCuePoints.length === 0 && idx === 0) predictedCuePoints.push(seg.start.clone());
+        predictedCuePoints.push(seg.end.clone());
+      });
+    }
+    const predictedTargetPoints: Vector2D[] = [];
+    if (pred && pred.targetPath.length > 0) {
+      pred.targetPath.forEach((seg, idx) => {
+        if (idx === 0) predictedTargetPoints.push(seg.start.clone());
+        predictedTargetPoints.push(seg.end.clone());
+      });
+    }
+    if (cue && !tracking.cueInOff) {
+      tracking.actualCueSamples.push(cue.position.clone());
+    }
+    this.lastShotReplay = {
+      frames: tracking.replayFrames,
+      predictedCuePath: predictedCuePoints,
+      actualCuePath: tracking.actualCueSamples,
+      predictedTargetPath: predictedTargetPoints,
+    };
+
     const log: ShotTelemetryLog = {
       id: tracking.id,
       timestamp: new Date().toLocaleTimeString(),
@@ -487,6 +619,10 @@ export class PhysicsEngine {
       actualTargetPotted,
       pottedList: tracking.pottedList,
       foulMessage: tracking.foulMessage,
+      firstHitBall: tracking.firstHitBall,
+      pottedBallsDetail: tracking.pottedBallsDetail,
+      cueInOff: tracking.cueInOff,
+      cushionHitAfterFirstContact: tracking.cushionHitAfterFirstContact,
     };
 
     if (this.onShotCompleted) {

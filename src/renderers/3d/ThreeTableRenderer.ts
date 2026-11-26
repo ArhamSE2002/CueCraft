@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { SnookerTable } from '../../engine/table/SnookerTable';
+import { Vector2D } from '../../engine/math/Vector2D';
 import { Ball } from '../../engine/physics/Ball';
 import type { TrajectoryPrediction } from '../../engine/physics/PhysicsEngine';
 import type { CameraViewMode, CameraFollowMode, InteractionMode, ThreeDragMode } from '../../stores/gameStore';
@@ -42,6 +43,18 @@ export class ThreeTableRenderer {
   public showTrajectories: boolean = true;
   public showGhostBall: boolean = true;
   public selectedMoveBallId: string | null = null;
+  public replayComparison: {
+    predictedCuePath: Vector2D[];
+    actualCuePath: Vector2D[];
+    show: boolean;
+  } | null = null;
+  private cameraShakeIntensity: number = 0;
+
+  public triggerBreakShake(powerPercent: number): void {
+    if (powerPercent >= 72) {
+      this.cameraShakeIntensity = Math.min(0.018, ((powerPercent - 65) / 35) * 0.016);
+    }
+  }
 
   // Callbacks to GameShell / Store
   public onAimAdjust?: (deltaRad: number) => void;
@@ -957,6 +970,14 @@ export class ThreeTableRenderer {
 
     this.updateCameraPosition(cueBall, aimAngleRad, prediction, isSimulatingNow);
 
+    if (this.cameraShakeIntensity > 0.0005) {
+      this.camera.position.x += (Math.random() - 0.5) * this.cameraShakeIntensity;
+      this.camera.position.y += (Math.random() - 0.5) * this.cameraShakeIntensity * 0.65;
+      this.cameraShakeIntensity *= 0.84;
+    } else {
+      this.cameraShakeIntensity = 0;
+    }
+
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -965,6 +986,22 @@ export class ThreeTableRenderer {
       const child = this.trajectoryGroup.children[0];
       this.trajectoryGroup.remove(child);
       if (child instanceof THREE.Line) child.geometry.dispose();
+    }
+
+    if (this.replayComparison?.show) {
+      const addPath = (pts: Vector2D[], hex: number) => {
+        if (pts.length < 2) return;
+        const vecs = pts.map((pt) => {
+          const v = this.toThreeCoords(pt);
+          v.y = 0.004;
+          return v;
+        });
+        const geo = new THREE.BufferGeometry().setFromPoints(vecs);
+        const mat = new THREE.LineBasicMaterial({ color: hex, transparent: true, opacity: 0.92 });
+        this.trajectoryGroup.add(new THREE.Line(geo, mat));
+      };
+      addPath(this.replayComparison.predictedCuePath, 0x38bdf8);
+      addPath(this.replayComparison.actualCuePath, 0xfb923c);
     }
 
     if (!this.showTrajectories || !prediction || !isAiming) {
