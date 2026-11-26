@@ -47,6 +47,7 @@ import {
   PlusCircle,
   Trash2,
   X,
+  MoreHorizontal,
 } from 'lucide-react';
 
 export const GameShell: React.FC = () => {
@@ -129,6 +130,10 @@ export const GameShell: React.FC = () => {
   const [shotsCount, setShotsCount] = useState(0);
   const [isPointerDown, setIsPointerDown] = useState(false);
   const [draggedBallId2D, setDraggedBallId2D] = useState<string | null>(null);
+  const [mobileControlTab, setMobileControlTab] = useState<'aim' | 'power' | 'spin'>('aim');
+  const [showMobileTools, setShowMobileTools] = useState(false);
+
+  const touchTableActiveRef = useRef(false);
 
   const activeScenario = activeScenarioId
     ? TRAINING_SCENARIOS.find((s) => s.id === activeScenarioId) ?? null
@@ -630,12 +635,20 @@ export const GameShell: React.FC = () => {
   ]);
 
   const handleWheel = (e: React.WheelEvent) => {
+    if (renderMode === '2d') {
+      const onTable = rendererRef.current?.isScreenPointOnTable(
+        e.clientX,
+        e.clientY,
+        engineRef.current?.table
+      );
+      if (!onTable) return;
+    }
     e.preventDefault();
     if (e.deltaY < 0) zoomIn();
     else zoomOut();
   };
 
-  // ── 2D Pointer Aim OR Move Balls ────────────────────────────────────────────
+  // ── 2D Pointer Aim OR Move Balls (Strictly confined inside Table Bounds!) ──
   const getTableCoords2D = (clientX: number, clientY: number): Vector2D | null => {
     if (!canvasRef.current || !rendererRef.current) return null;
     const rect = canvasRef.current.getBoundingClientRect();
@@ -643,26 +656,39 @@ export const GameShell: React.FC = () => {
     return rendererRef.current.toTable(screenPos);
   };
 
-  const handle2DPointerDown = (clientX: number, clientY: number) => {
-    if (!engineRef.current || isSimulating) return;
+  const handle2DPointerDown = (clientX: number, clientY: number): boolean => {
+    if (!engineRef.current || !rendererRef.current || isSimulating) return false;
+    const onTable = rendererRef.current.isScreenPointOnTable(
+      clientX,
+      clientY,
+      engineRef.current.table
+    );
+    if (!onTable) {
+      setIsPointerDown(false);
+      setDraggedBallId2D(null);
+      return false;
+    }
+
     setIsPointerDown(true);
     const tablePos = getTableCoords2D(clientX, clientY);
-    if (!tablePos) return;
+    if (!tablePos) return false;
 
     if (interactionMode === 'move') {
       // Find clicked ball to move
       for (const ball of engineRef.current.balls) {
         if (!ball.potted && ball.position.distanceTo(tablePos) <= ball.radius * 1.8) {
           setDraggedBallId2D(ball.id);
-          return;
+          return true;
         }
       }
       setDraggedBallId2D(null);
+      return true;
     } else {
       const cue = engineRef.current.cueBall;
-      if (!cue || cue.potted) return;
+      if (!cue || cue.potted) return false;
       const delta = tablePos.sub(cue.position);
       if (delta.lengthSq() > 100) setAimAngleRad(delta.angle());
+      return true;
     }
   };
 
@@ -685,6 +711,68 @@ export const GameShell: React.FC = () => {
     setIsPointerDown(false);
     setDraggedBallId2D(null);
   };
+
+  const pointerHandlersRef = useRef({
+    down: handle2DPointerDown,
+    move: handle2DPointerMove,
+    up: handle2DPointerUp,
+  });
+  pointerHandlersRef.current = {
+    down: handle2DPointerDown,
+    move: handle2DPointerMove,
+    up: handle2DPointerUp,
+  };
+
+  // Attach non-passive native touch listeners so table touches aim/drag while outside-table swipes scroll the webpage natively
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1 || !rendererRef.current || !engineRef.current) {
+        touchTableActiveRef.current = false;
+        return;
+      }
+      const t = e.touches[0];
+      const onTable = rendererRef.current.isScreenPointOnTable(
+        t.clientX,
+        t.clientY,
+        engineRef.current.table
+      );
+      if (!onTable) {
+        touchTableActiveRef.current = false;
+        return;
+      }
+      touchTableActiveRef.current = true;
+      e.preventDefault();
+      pointerHandlersRef.current.down(t.clientX, t.clientY);
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (!touchTableActiveRef.current || e.touches.length !== 1) return;
+      e.preventDefault();
+      const t = e.touches[0];
+      pointerHandlersRef.current.move(t.clientX, t.clientY);
+    };
+
+    const onTouchEnd = () => {
+      if (!touchTableActiveRef.current) return;
+      touchTableActiveRef.current = false;
+      pointerHandlersRef.current.up();
+    };
+
+    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+    canvas.addEventListener('touchend', onTouchEnd);
+    canvas.addEventListener('touchcancel', onTouchEnd);
+
+    return () => {
+      canvas.removeEventListener('touchstart', onTouchStart);
+      canvas.removeEventListener('touchmove', onTouchMove);
+      canvas.removeEventListener('touchend', onTouchEnd);
+      canvas.removeEventListener('touchcancel', onTouchEnd);
+    };
+  }, []);
 
   const handleAngleSlider = (e: React.ChangeEvent<HTMLInputElement>) => {
     const deg = parseFloat(e.target.value);
@@ -724,14 +812,14 @@ export const GameShell: React.FC = () => {
         />
       )}
 
-      <div className="flex flex-col w-full h-full max-h-full overflow-hidden bg-[#06090C] text-ivory-text select-none">
+      <div className="flex flex-col w-full min-h-full lg:h-full lg:max-h-full lg:overflow-hidden bg-[#06090C] text-ivory-text select-none">
         {/* ═══════════════════════════════════════════════════════════════
             TOP BROADCAST TELEMETRY BAR
         ═══════════════════════════════════════════════════════════════ */}
-        <header className="relative z-30 flex flex-wrap items-center justify-between gap-2 px-4 py-2 bg-[#0B1014]/95 backdrop-blur-md border-b border-white/[0.08] shrink-0">
-          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+        <header className="relative z-30 flex items-center justify-between gap-2 px-3 sm:px-4 py-2 bg-[#090D13]/95 backdrop-blur-xl border-b border-white/[0.08] shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0">
             {/* Game Rules & Table Variant Selector */}
-            <div className="flex items-center bg-[#06090C] p-0.5 rounded-full border border-white/[0.08]">
+            <div className="flex items-center bg-[#06090C] p-0.5 rounded-full border border-white/[0.08] overflow-x-auto max-w-[42vw] sm:max-w-none">
               {(
                 [
                   { id: 'practice', label: 'Practice' },
@@ -743,10 +831,10 @@ export const GameShell: React.FC = () => {
                 <button
                   key={g.id}
                   onClick={() => handleGameVariantChange(g.id)}
-                  className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-all ${
+                  className={`px-2 sm:px-2.5 py-1 rounded-full text-[10px] sm:text-[11px] font-medium whitespace-nowrap transition-all ${
                     gameVariant === g.id && !activeScenarioId
-                      ? 'bg-emerald-600/90 text-white shadow-sm'
-                      : 'text-ivory-muted hover:text-ivory-text'
+                      ? 'bg-emerald-bright text-[#05080C] font-bold shadow-sm'
+                      : 'text-slate-300 hover:text-white'
                   }`}
                 >
                   {g.label}
@@ -755,36 +843,38 @@ export const GameShell: React.FC = () => {
             </div>
 
             {/* Aim vs Move Balls Toggle */}
-            <div className="flex items-center bg-[#06090C] p-0.5 rounded-full border border-white/[0.08]">
+            <div className="flex items-center bg-[#06090C] p-0.5 rounded-full border border-white/[0.08] shrink-0">
               <button
                 onClick={() => setInteractionMode('aim')}
-                className={`px-2.5 py-1 rounded-full text-[11px] flex items-center gap-1 transition-all font-medium ${
+                className={`px-2 sm:px-2.5 py-1 rounded-full text-[10px] sm:text-[11px] flex items-center gap-1 transition-all font-medium ${
                   interactionMode === 'aim'
                     ? 'bg-brass-primary text-[#06090C] font-bold'
                     : 'text-ivory-muted hover:text-ivory-text'
                 }`}
                 title="Aim & Shoot Mode (M)"
               >
-                <Crosshair className="w-3 h-3" /> Aim
+                <Crosshair className="w-3 h-3" />
+                <span className="hidden sm:inline">Aim</span>
               </button>
               <button
                 onClick={() => setInteractionMode('move')}
-                className={`px-2.5 py-1 rounded-full text-[11px] flex items-center gap-1 transition-all font-medium ${
+                className={`px-2 sm:px-2.5 py-1 rounded-full text-[10px] sm:text-[11px] flex items-center gap-1 transition-all font-medium ${
                   interactionMode === 'move'
                     ? 'bg-chalk-cyan text-[#06090C] font-bold'
                     : 'text-ivory-muted hover:text-ivory-text'
                 }`}
                 title="Drag ANY ball freely on table (M)"
               >
-                <Move className="w-3 h-3" /> Move
+                <Move className="w-3 h-3" />
+                <span className="hidden sm:inline">Move</span>
               </button>
             </div>
 
             {/* Practice Actions: Reset Table & Add Balls */}
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 shrink-0">
               <button
                 onClick={handleResetTable}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/[0.04] hover:bg-white/[0.1] border border-white/[0.09] text-ivory-text text-[11px] font-medium transition-colors"
+                className="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/[0.04] hover:bg-white/[0.1] border border-white/[0.09] text-ivory-text text-[11px] font-medium transition-colors"
                 title="Reset current table & balls"
               >
                 <RotateCcw className="w-3 h-3 text-brass-primary" />
@@ -793,8 +883,11 @@ export const GameShell: React.FC = () => {
 
               <div className="relative">
                 <button
-                  onClick={() => setShowAddBalls((v) => !v)}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-full border text-[11px] font-medium transition-colors ${
+                  onClick={() => {
+                    setShowAddBalls((v) => !v);
+                    setShowMobileTools(false);
+                  }}
+                  className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-full border text-[10px] sm:text-[11px] font-medium transition-colors ${
                     showAddBalls
                       ? 'bg-chalk-cyan text-[#06090C] border-chalk-cyan font-bold'
                       : 'bg-white/[0.04] hover:bg-white/[0.1] border-white/[0.09] text-chalk-cyan'
@@ -802,11 +895,12 @@ export const GameShell: React.FC = () => {
                   title="Add balls to table or clear objects"
                 >
                   <PlusCircle className="w-3 h-3" />
-                  <span>Add Balls</span>
+                  <span className="hidden sm:inline">Add Balls</span>
+                  <span className="sm:hidden">Balls</span>
                 </button>
 
                 {showAddBalls && (
-                  <div className="absolute left-0 top-full mt-2 w-72 sm:w-80 rounded-2xl bg-[#0F151B]/98 backdrop-blur-xl border border-white/15 shadow-2xl p-3.5 z-50">
+                  <div className="absolute right-0 sm:left-0 top-full mt-2 w-72 sm:w-80 rounded-2xl bg-[#0F151B]/98 backdrop-blur-xl border border-white/15 shadow-2xl p-3.5 z-50">
                     <div className="flex items-center justify-between mb-2.5">
                       <span className="text-[11px] font-mono uppercase tracking-wider text-brass-primary font-bold">
                         Ball Spawner
@@ -902,29 +996,29 @@ export const GameShell: React.FC = () => {
           </div>
 
           {/* Right HUD Telemetry & Studio Tools */}
-          <div className="flex items-center gap-1.5 sm:gap-2 text-xs font-mono">
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#06090C] border border-white/[0.08]">
+          <div className="flex items-center gap-1.5 sm:gap-2 text-xs font-mono shrink-0">
+            <div className="hidden xs:flex sm:flex items-center gap-1 px-2 py-1 rounded-full bg-[#06090C] border border-white/[0.08]">
               <Trophy className="w-3 h-3 text-brass-primary" />
               <span className="font-bold text-brass-primary text-xs tabular-nums">{score}</span>
             </div>
 
-            <div className="hidden md:flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#06090C] border border-white/[0.08] text-[11px]">
+            <div className="hidden lg:flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#06090C] border border-white/[0.08] text-[11px]">
               <span className="text-ivory-muted">Cut</span>
               <span className="font-bold text-chalk-cyan tabular-nums">{cutAngleDeg}°</span>
             </div>
 
             <button
               onClick={() => setShowEquipmentLab(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/[0.04] hover:bg-white/[0.1] border border-brass-primary/35 text-brass-primary text-[11px] font-sans font-semibold transition-colors"
+              className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/[0.04] hover:bg-white/[0.1] border border-brass-primary/35 text-brass-primary text-[11px] font-sans font-semibold transition-colors"
               title="Customize Cue Shaft, Tip, Cloth Speed & Cushion Borders"
             >
               <Sliders className="w-3 h-3" />
-              <span className="hidden sm:inline">Table &amp; Cue</span>
+              <span>Table &amp; Cue</span>
             </button>
 
             <button
               onClick={() => setShowShotLog(true)}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/[0.04] hover:bg-white/[0.1] border border-white/[0.09] text-chalk-cyan text-[11px] transition-colors"
+              className="hidden md:flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/[0.04] hover:bg-white/[0.1] border border-white/[0.09] text-chalk-cyan text-[11px] transition-colors"
               title="Inspect Pre-Strike Prediction vs Post-Strike Actual Telemetry Logs"
             >
               <Activity className="w-3 h-3" />
@@ -934,20 +1028,20 @@ export const GameShell: React.FC = () => {
             <div className="flex items-center bg-[#06090C] p-0.5 rounded-full border border-white/[0.08]">
               <button
                 onClick={() => setRenderMode('2d')}
-                className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium flex items-center gap-1 transition-all ${
+                className={`px-2 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-medium flex items-center gap-1 transition-all ${
                   renderMode === '2d'
-                    ? 'bg-brass-primary text-[#06090C] font-bold'
-                    : 'text-ivory-muted hover:text-ivory-text'
+                    ? 'bg-emerald-bright text-[#05080C] font-bold'
+                    : 'text-slate-300 hover:text-white'
                 }`}
               >
                 <Layers className="w-3 h-3" /> 2D
               </button>
               <button
                 onClick={() => setRenderMode('3d')}
-                className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium flex items-center gap-1 transition-all ${
+                className={`px-2 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-medium flex items-center gap-1 transition-all ${
                   renderMode === '3d'
-                    ? 'bg-brass-primary text-[#06090C] font-bold'
-                    : 'text-ivory-muted hover:text-ivory-text'
+                    ? 'bg-emerald-bright text-[#05080C] font-bold'
+                    : 'text-slate-300 hover:text-white'
                 }`}
               >
                 <Sparkles className="w-3 h-3" /> 3D
@@ -956,18 +1050,81 @@ export const GameShell: React.FC = () => {
 
             <button
               onClick={() => setShowShortcuts(true)}
-              className="p-1.5 rounded-full text-ivory-muted hover:text-ivory-text hover:bg-white/[0.08] transition-colors border border-white/[0.08]"
+              className="hidden md:flex p-1.5 rounded-full text-ivory-muted hover:text-ivory-text hover:bg-white/[0.08] transition-colors border border-white/[0.08]"
               title="Keyboard shortcuts (?)"
             >
               <Keyboard className="w-3.5 h-3.5" />
             </button>
+
+            {/* Mobile overflow studio tools trigger */}
+            <div className="relative md:hidden">
+              <button
+                onClick={() => {
+                  setShowMobileTools((v) => !v);
+                  setShowAddBalls(false);
+                }}
+                className={`p-1.5 rounded-full border transition-colors ${
+                  showMobileTools
+                    ? 'bg-emerald-bright text-[#05080C] border-emerald-bright'
+                    : 'bg-white/[0.05] text-slate-300 border-white/[0.1]'
+                }`}
+                title="Studio Tools & Reset"
+              >
+                <MoreHorizontal className="w-3.5 h-3.5" />
+              </button>
+
+              {showMobileTools && (
+                <div className="absolute right-0 top-full mt-2 w-52 rounded-2xl bg-[#0F151B]/98 backdrop-blur-xl border border-white/15 shadow-2xl p-2 z-50 flex flex-col gap-1 font-sans text-xs">
+                  <button
+                    onClick={() => {
+                      handleResetTable();
+                      setShowMobileTools(false);
+                    }}
+                    className="flex items-center gap-2 w-full px-3 py-2 rounded-xl hover:bg-white/[0.08] text-left text-white"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 text-brass-primary" />
+                    <span>Reset Table</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowEquipmentLab(true);
+                      setShowMobileTools(false);
+                    }}
+                    className="flex items-center gap-2 w-full px-3 py-2 rounded-xl hover:bg-white/[0.08] text-left text-white"
+                  >
+                    <Sliders className="w-3.5 h-3.5 text-emerald-bright" />
+                    <span>Table &amp; Cue Setup</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowShotLog(true);
+                      setShowMobileTools(false);
+                    }}
+                    className="flex items-center gap-2 w-full px-3 py-2 rounded-xl hover:bg-white/[0.08] text-left text-chalk-cyan"
+                  >
+                    <Activity className="w-3.5 h-3.5" />
+                    <span>Telemetry Logs ({shotLogs.length})</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowShortcuts(true);
+                      setShowMobileTools(false);
+                    }}
+                    className="flex items-center gap-2 w-full px-3 py-2 rounded-xl hover:bg-white/[0.08] text-left text-slate-300"
+                  >
+                    <Keyboard className="w-3.5 h-3.5" />
+                    <span>Shortcuts &amp; Guide</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
         {/* ═══════════════════════════════════════════════════════════════
             SIMULATION VIEWPORT
         ═══════════════════════════════════════════════════════════════ */}
-        <main className="relative flex-1 min-h-0 w-full bg-[#040709] overflow-hidden flex items-center justify-center p-1 sm:p-2">
+        <main className="relative w-full bg-[#040709] flex items-center justify-center p-1.5 sm:p-2.5 h-[50vh] min-h-[285px] sm:h-[58vh] lg:h-auto lg:flex-1 lg:min-h-0 lg:overflow-hidden">
           {/* Active Lecture / Lesson Scenario Challenge Banner */}
           {activeScenario && (
             <div className="absolute top-3 left-3 z-20 max-w-md bg-surface-card/92 backdrop-blur border border-brass-primary/40 rounded-xl p-2.5 shadow-xl text-xs">
@@ -1143,22 +1300,27 @@ export const GameShell: React.FC = () => {
             )}
           </div>
 
-          {/* 2D Canvas */}
+          {/* 2D Canvas (Table-only aim & drag; swiping outside scrolls webpage cleanly) */}
           <canvas
             ref={canvasRef}
             onMouseDown={(e) => handle2DPointerDown(e.clientX, e.clientY)}
             onMouseMove={(e) => handle2DPointerMove(e.clientX, e.clientY)}
             onMouseUp={handle2DPointerUp}
             onMouseLeave={handle2DPointerUp}
-            onTouchStart={(e) => e.touches[0] && handle2DPointerDown(e.touches[0].clientX, e.touches[0].clientY)}
-            onTouchMove={(e) => e.touches[0] && handle2DPointerMove(e.touches[0].clientX, e.touches[0].clientY)}
-            onTouchEnd={handle2DPointerUp}
             onWheel={handleWheel}
-            className={`w-full h-full max-h-full rounded-xl border border-surface-subtle bg-felt-darkest ${
+            className={`w-full h-full max-h-full rounded-xl border border-white/[0.08] bg-felt-darkest ${
               interactionMode === 'move' ? 'cursor-grab active:cursor-grabbing' : 'cursor-crosshair'
             } ${renderMode === '2d' ? 'block' : 'hidden'}`}
-            style={{ touchAction: 'none' }}
+            style={{ touchAction: 'pan-y' }}
           />
+
+          {/* Subtle Table-Swipe Instruction Pill in 2D mode */}
+          {renderMode === '2d' && !isSimulating && (
+            <div className="hidden sm:flex items-center gap-1.5 absolute bottom-3 left-3 z-10 px-2.5 py-1 rounded-full bg-[#090D13]/80 backdrop-blur border border-white/[0.08] text-[10px] font-mono text-slate-400 pointer-events-none">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-bright" />
+              <span>Swipe inside table to aim · Scroll outside freely</span>
+            </div>
+          )}
 
           {/* 3D Three.js Container */}
           <div
@@ -1171,18 +1333,190 @@ export const GameShell: React.FC = () => {
         </main>
 
         {/* ═══════════════════════════════════════════════════════════════
-            BOTTOM CONTROL DOCK
+            BOTTOM STUDIO CONSOLE (RESPONSIVE MOBILE + DESKTOP)
         ═══════════════════════════════════════════════════════════════ */}
-        <footer className="w-full bg-[#0B1014]/95 backdrop-blur-md border-t border-white/[0.08] px-4 py-2 shrink-0">
-          <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-x-5 gap-y-2">
+        <footer className="w-full bg-[#090E14]/95 backdrop-blur-xl border-t border-white/[0.08] px-3 sm:px-4 py-2.5 sm:py-2 shrink-0">
+          {/* ── MOBILE / TABLET ERGONOMIC STUDIO DOCK (< lg) ── */}
+          <div className="lg:hidden flex flex-col gap-2.5 max-w-2xl mx-auto">
+            {/* Persistent Thumb-Ready Strike + Quick Aim Strip */}
+            <div className="flex items-center justify-between gap-2 bg-[#06090D] border border-white/[0.08] rounded-2xl px-2.5 py-2">
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => adjustAimAngleRad(-0.035)}
+                  className="px-2 py-2 rounded-xl bg-white/[0.05] active:bg-white/[0.15] text-slate-200 border border-white/[0.08] text-[11px] font-mono"
+                >
+                  −2°
+                </button>
+                <button
+                  onClick={() => adjustAimAngleRad(-(aimSensitivity * Math.PI) / 180)}
+                  className="px-2 py-2 rounded-xl bg-white/[0.05] active:bg-white/[0.15] text-slate-200 border border-white/[0.08] text-[11px] font-mono"
+                >
+                  −{aimSensitivity}°
+                </button>
+                <span className="px-1.5 text-xs font-mono font-bold text-white tabular-nums min-w-[54px] text-center">
+                  {aimDeg.toFixed(1)}°
+                </span>
+                <button
+                  onClick={() => adjustAimAngleRad((aimSensitivity * Math.PI) / 180)}
+                  className="px-2 py-2 rounded-xl bg-white/[0.05] active:bg-white/[0.15] text-slate-200 border border-white/[0.08] text-[11px] font-mono"
+                >
+                  +{aimSensitivity}°
+                </button>
+                <button
+                  onClick={() => adjustAimAngleRad(0.035)}
+                  className="px-2 py-2 rounded-xl bg-white/[0.05] active:bg-white/[0.15] text-slate-200 border border-white/[0.08] text-[11px] font-mono"
+                >
+                  +2°
+                </button>
+              </div>
+
+              <button
+                onClick={handleStrike}
+                disabled={isSimulating}
+                className={`flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-full font-bold text-xs tracking-wider uppercase transition-all shadow-lg shrink-0 ${
+                  isSimulating
+                    ? 'bg-surface-subtle text-ivory-faint cursor-not-allowed'
+                    : 'bg-emerald-bright hover:bg-emerald text-[#05080C] hover:text-white shadow-brass-glow active:scale-95'
+                }`}
+              >
+                <Play className="w-3.5 h-3.5 fill-current" />
+                {isSimulating ? 'Rolling…' : 'Strike'}
+              </button>
+            </div>
+
+            {/* Segmented Tab Bar */}
+            <div className="grid grid-cols-3 gap-1 bg-[#06090D] p-1 rounded-xl border border-white/[0.08] text-[11px] font-mono">
+              <button
+                onClick={() => setMobileControlTab('aim')}
+                className={`py-1.5 rounded-lg transition-colors flex items-center justify-center gap-1 ${
+                  mobileControlTab === 'aim'
+                    ? 'bg-white/[0.12] text-white font-bold'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Compass className="w-3 h-3 text-brass-primary" />
+                <span>Aim &amp; Aids</span>
+              </button>
+              <button
+                onClick={() => setMobileControlTab('power')}
+                className={`py-1.5 rounded-lg transition-colors flex items-center justify-center gap-1 ${
+                  mobileControlTab === 'power'
+                    ? 'bg-white/[0.12] text-emerald-bright font-bold'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <span>Power ({power}%)</span>
+              </button>
+              <button
+                onClick={() => setMobileControlTab('spin')}
+                className={`py-1.5 rounded-lg transition-colors flex items-center justify-center gap-1 ${
+                  mobileControlTab === 'spin'
+                    ? 'bg-white/[0.12] text-sky-400 font-bold'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <span>Spin</span>
+              </button>
+            </div>
+
+            {/* Active Mobile Panel */}
+            {mobileControlTab === 'aim' && (
+              <div className="bg-[#080D13]/95 border border-white/[0.1] rounded-2xl p-3 flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-mono uppercase tracking-wider text-brass-primary font-semibold">
+                    Precision Angle · Cut {cutAngleDeg}°
+                  </span>
+                  <div className="flex items-center gap-1 text-[10px] font-mono">
+                    {[
+                      { label: '0.05°', val: 0.05 },
+                      { label: '0.1°', val: 0.1 },
+                      { label: '0.5°', val: 0.5 },
+                      { label: '2°', val: 2.0 },
+                    ].map(({ label, val }) => (
+                      <button
+                        key={label}
+                        onClick={() => setAimSensitivity(val)}
+                        className={`px-2 py-0.5 rounded-md ${
+                          aimSensitivity === val
+                            ? 'bg-brass-primary text-[#05080C] font-bold'
+                            : 'text-slate-400 bg-white/[0.05]'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <input
+                  type="range"
+                  min="0"
+                  max="359.95"
+                  step={aimSensitivity}
+                  value={aimDeg.toFixed(2)}
+                  onChange={handleAngleSlider}
+                  className="w-full h-2.5 bg-arena-bg rounded-full appearance-none accent-brass-primary cursor-ew-resize"
+                />
+
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-white/[0.06]">
+                  <button
+                    onClick={toggleFullRoute}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[11px] font-mono ${
+                      showFullRoute
+                        ? 'bg-emerald-500/15 border-emerald-400/50 text-chalk-cyan font-bold'
+                        : 'bg-[#06090C] border-white/10 text-slate-400'
+                    }`}
+                  >
+                    <Route className="w-3.5 h-3.5" />
+                    <span>{showFullRoute ? 'Full Route' : 'Aim Ray'}</span>
+                  </button>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={toggleTrajectories}
+                      className={`px-2.5 py-1.5 rounded-full border text-[11px] flex items-center gap-1 ${
+                        showTrajectories
+                          ? 'bg-emerald-500/20 border-emerald-400/40 text-chalk-cyan'
+                          : 'border-white/10 text-slate-400'
+                      }`}
+                    >
+                      <Eye className="w-3.5 h-3.5" /> Guides
+                    </button>
+                    <button
+                      onClick={toggleGhostBall}
+                      className={`px-2.5 py-1.5 rounded-full border text-[11px] flex items-center gap-1 ${
+                        showGhostBall
+                          ? 'bg-emerald-500/20 border-emerald-400/40 text-chalk-cyan'
+                          : 'border-white/10 text-slate-400'
+                      }`}
+                    >
+                      <Crosshair className="w-3.5 h-3.5" /> Ghost
+                    </button>
+                    <button
+                      onClick={handleResetCueBall}
+                      className="px-2.5 py-1.5 rounded-full border border-white/10 text-slate-300 text-[11px] flex items-center gap-1"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" /> Cue
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {mobileControlTab === 'power' && <PowerControl />}
+            {mobileControlTab === 'spin' && <SpinSelector />}
+          </div>
+
+          {/* ── DESKTOP STUDIO CONSOLE (lg+) ── */}
+          <div className="hidden lg:flex max-w-7xl mx-auto items-center justify-between gap-4">
             {/* Aim Dial */}
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[10px] uppercase tracking-widest font-semibold text-brass-primary/80 flex items-center gap-1">
+            <div className="flex flex-col gap-1.5 bg-[#080D13]/95 border border-white/[0.1] px-3.5 py-2.5 rounded-2xl shadow-inner">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[10px] uppercase tracking-widest font-semibold text-brass-primary flex items-center gap-1">
                   <Compass className="w-3 h-3" /> Aim Dial
                 </span>
                 <div className="flex items-center gap-0.5 text-[9px] font-mono">
-                  <span className="text-ivory-faint mr-0.5">Step:</span>
+                  <span className="text-slate-400 mr-0.5">Step:</span>
                   {[
                     { label: '0.05°', val: 0.05 },
                     { label: '0.1°', val: 0.1 },
@@ -1192,10 +1526,10 @@ export const GameShell: React.FC = () => {
                     <button
                       key={label}
                       onClick={() => setAimSensitivity(val)}
-                      className={`px-1 py-0.2 rounded transition-colors ${
+                      className={`px-1.5 py-0.5 rounded transition-colors ${
                         aimSensitivity === val
-                          ? 'bg-brass-primary text-surface-base font-bold'
-                          : 'text-ivory-faint hover:text-ivory-text bg-surface-elevated/60'
+                          ? 'bg-brass-primary text-[#05080C] font-bold'
+                          : 'text-slate-400 hover:text-white bg-white/[0.04]'
                       }`}
                     >
                       {label}
@@ -1207,11 +1541,11 @@ export const GameShell: React.FC = () => {
               <div className="flex items-center gap-1.5">
                 <button
                   onClick={() => adjustAimAngleRad(-0.087)}
-                  className="px-1.5 py-0.5 rounded bg-surface-elevated hover:bg-surface-subtle text-ivory-text border border-surface-subtle text-[10px] font-mono"
+                  className="px-2 py-1 rounded-lg bg-white/[0.05] hover:bg-white/[0.12] text-ivory-text border border-white/[0.08] text-[10px] font-mono"
                 >−5°</button>
                 <button
                   onClick={() => adjustAimAngleRad(-(aimSensitivity * Math.PI) / 180)}
-                  className="px-1.5 py-0.5 rounded bg-surface-elevated hover:bg-surface-subtle text-ivory-text border border-surface-subtle text-[10px] font-mono"
+                  className="px-2 py-1 rounded-lg bg-white/[0.05] hover:bg-white/[0.12] text-ivory-text border border-white/[0.08] text-[10px] font-mono"
                 >−{aimSensitivity}°</button>
 
                 <div className="relative flex flex-col items-center">
@@ -1222,18 +1556,20 @@ export const GameShell: React.FC = () => {
                     step={aimSensitivity}
                     value={aimDeg.toFixed(2)}
                     onChange={handleAngleSlider}
-                    className="w-28 accent-brass-primary cursor-ew-resize"
+                    className="w-32 h-2 bg-arena-bg rounded-full accent-brass-primary cursor-ew-resize"
                   />
-                  <span className="text-[10px] font-mono text-ivory-text tabular-nums">{aimDeg.toFixed(2)}°</span>
+                  <span className="text-[11px] font-mono text-white tabular-nums mt-0.5 font-semibold">
+                    {aimDeg.toFixed(2)}°
+                  </span>
                 </div>
 
                 <button
                   onClick={() => adjustAimAngleRad((aimSensitivity * Math.PI) / 180)}
-                  className="px-1.5 py-0.5 rounded bg-surface-elevated hover:bg-surface-subtle text-ivory-text border border-surface-subtle text-[10px] font-mono"
+                  className="px-2 py-1 rounded-lg bg-white/[0.05] hover:bg-white/[0.12] text-ivory-text border border-white/[0.08] text-[10px] font-mono"
                 >+{aimSensitivity}°</button>
                 <button
                   onClick={() => adjustAimAngleRad(0.087)}
-                  className="px-1.5 py-0.5 rounded bg-surface-elevated hover:bg-surface-subtle text-ivory-text border border-surface-subtle text-[10px] font-mono"
+                  className="px-2 py-1 rounded-lg bg-white/[0.05] hover:bg-white/[0.12] text-ivory-text border border-white/[0.08] text-[10px] font-mono"
                 >+5°</button>
               </div>
             </div>
@@ -1242,65 +1578,67 @@ export const GameShell: React.FC = () => {
             <SpinSelector />
 
             {/* Action Buttons */}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-2 items-end">
               <button
                 onClick={handleStrike}
                 disabled={isSimulating}
-                className={`flex items-center justify-center gap-2 px-6 py-2.5 rounded-full font-bold text-xs tracking-wider uppercase transition-all shadow-lg ${
+                className={`flex items-center justify-center gap-2 px-7 py-3 rounded-full font-bold text-xs tracking-wider uppercase transition-all shadow-lg w-full ${
                   isSimulating
                     ? 'bg-surface-subtle text-ivory-faint cursor-not-allowed'
-                    : 'bg-brass-primary hover:bg-brass-hover text-[#06090C] shadow-brass-glow active:scale-95'
+                    : 'bg-emerald-bright hover:bg-emerald text-[#05080C] hover:text-white shadow-brass-glow active:scale-95'
                 }`}
               >
                 <Play className="w-3.5 h-3.5 fill-current" />
                 {isSimulating ? 'Simulating…' : 'Strike'}
               </button>
 
-              <button
-                onClick={toggleFullRoute}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-full border text-xs font-mono transition-all ${
-                  showFullRoute
-                    ? 'bg-emerald-500/15 border-emerald-400/50 text-chalk-cyan font-bold shadow-sm'
-                    : 'bg-[#06090C] border-white/10 text-ivory-faint hover:text-ivory-text'
-                }`}
-                title="Full Multi-Ball & Multi-Cushion Simulation Trace vs Direct Ray (R)"
-              >
-                <Route className="w-3.5 h-3.5" />
-                <span className="text-[10px] font-sans font-semibold tracking-wide">
-                  {showFullRoute ? 'Full Route' : 'Aim Ray'}
-                </span>
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={toggleFullRoute}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-mono transition-all ${
+                    showFullRoute
+                      ? 'bg-emerald-500/15 border-emerald-400/50 text-chalk-cyan font-bold shadow-sm'
+                      : 'bg-[#06090C] border-white/10 text-ivory-faint hover:text-ivory-text'
+                  }`}
+                  title="Full Multi-Ball & Multi-Cushion Simulation Trace vs Direct Ray (R)"
+                >
+                  <Route className="w-3.5 h-3.5" />
+                  <span className="text-[10px] font-sans font-semibold tracking-wide">
+                    {showFullRoute ? 'Full Route' : 'Aim Ray'}
+                  </span>
+                </button>
 
-              <div className="flex items-center gap-1 bg-[#06090C] p-0.5 rounded-full border border-white/[0.08]">
-                <button
-                  onClick={toggleTrajectories}
-                  className={`p-1.5 rounded-full transition-colors ${
-                    showTrajectories
-                      ? 'bg-emerald-500/20 text-chalk-cyan'
-                      : 'text-ivory-faint hover:text-ivory-text'
-                  }`}
-                  title="Toggle trajectory lines (T)"
-                >
-                  <Eye className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={toggleGhostBall}
-                  className={`p-1.5 rounded-full transition-colors ${
-                    showGhostBall
-                      ? 'bg-emerald-500/20 text-chalk-cyan'
-                      : 'text-ivory-faint hover:text-ivory-text'
-                  }`}
-                  title="Toggle ghost ball (G)"
-                >
-                  <Crosshair className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={handleResetCueBall}
-                  className="p-1.5 rounded-full text-ivory-muted hover:text-ivory-text transition-colors"
-                  title="Reset cue ball position (C)"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex items-center gap-1 bg-[#06090C] p-0.5 rounded-full border border-white/[0.08]">
+                  <button
+                    onClick={toggleTrajectories}
+                    className={`p-1.5 rounded-full transition-colors ${
+                      showTrajectories
+                        ? 'bg-emerald-500/20 text-chalk-cyan'
+                        : 'text-ivory-faint hover:text-ivory-text'
+                    }`}
+                    title="Toggle trajectory lines (T)"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={toggleGhostBall}
+                    className={`p-1.5 rounded-full transition-colors ${
+                      showGhostBall
+                        ? 'bg-emerald-500/20 text-chalk-cyan'
+                        : 'text-ivory-faint hover:text-ivory-text'
+                    }`}
+                    title="Toggle ghost ball (G)"
+                  >
+                    <Crosshair className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={handleResetCueBall}
+                    className="p-1.5 rounded-full text-ivory-muted hover:text-ivory-text transition-colors"
+                    title="Reset cue ball position (C)"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>

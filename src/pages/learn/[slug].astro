@@ -4,8 +4,48 @@ import { LessonPlayLab } from '../../components/learn/LessonPlayLab';
 
 export async function getStaticPaths() {
   const articles = [
+    // ═══════════════════════════════════════════════════════════════════════
+    // BEGINNER / JUNIOR TRACK
+    // ═══════════════════════════════════════════════════════════════════════
+    {
+      slug: 'straight-potting-fundamentals',
+      tier: 'beginner',
+      levelBadge: 'Beginner · Juniors',
+      title: 'Junior Guide: Ghost-Ball Aim & Straight Potting',
+      category: 'Junior Fundamentals',
+      summary:
+        'Start here: learn how to align your eyes behind the shot line, visualize the Ghost Ball contact point, and strike dead center for repeatable straight pots.',
+      publishedDate: '2026-11-26',
+      content: `
+        <p class="lead text-base sm:text-lg text-slate-300 leading-relaxed mb-6">
+          Every great player begins with one skill: sending the cue ball straight along the exact line you are looking down. Before worrying about screw or side spin, juniors build unshakeable consistency using center-ball alignment.
+        </p>
+
+        <h2 class="font-display text-2xl font-bold text-white mt-8 mb-4">1. Visualising the Ghost Ball</h2>
+        <p class="text-sm text-slate-300 leading-relaxed mb-4">
+          Imagine an invisible second ball touching the back edge of your target object ball, lined up directly away from the pocket center. Your only mission is to deliver the center of the cue ball squarely into that Ghost Ball center.
+        </p>
+
+        <h2 class="font-display text-2xl font-bold text-white mt-8 mb-4">2. The Golden Center-Ball Rule</h2>
+        <div class="p-4 rounded-xl bg-white/[0.04] border border-emerald-bright/25 font-mono text-xs text-emerald-bright font-bold my-4">
+          Tip Offset = (0.00 X, 0.00 Y) &rarr; Zero Squirt &middot; Zero Cut Throw
+        </div>
+        <p class="text-sm text-slate-300 leading-relaxed mb-4">
+          When you hit slightly left or right unintentionally, the cue pushes the cue ball off line (deflection). Keep the cue tip strictly on the vertical center line while learning stance, bridge hand stability, and smooth follow-through.
+        </p>
+
+        <h2 class="font-display text-2xl font-bold text-white mt-8 mb-4">3. Three-Step Pre-Shot Routine for Juniors</h2>
+        <ul class="list-disc list-inside space-y-2 text-sm text-slate-300 mb-6">
+          <li><strong>Step Behind:</strong> Stand upright behind the cue ball and spot the Ghost Ball contact point first.</li>
+          <li><strong>Step In Smoothly:</strong> Place your bridge hand firmly on the cloth while keeping your chin centered over the cue shaft.</li>
+          <li><strong>Stay Still After Impact:</strong> Watch the ball drop before lifting your head so your stroke never pulls off line.</li>
+        </ul>
+      `,
+    },
     {
       slug: 'cue-ball-control',
+      tier: 'beginner',
+      levelBadge: 'Beginner · Core',
       title: 'Understanding Cue-Ball Control & The Stun Shot',
       category: 'Kinematics',
       summary: 'Master the sliding-to-rolling friction transition, dead-stop stun shots, and the fundamental physics of potting without cue-ball drift.',
@@ -43,7 +83,123 @@ export async function getStaticPaths() {
       `,
     },
     {
+      slug: 'junior-safety-and-rules',
+      tier: 'beginner',
+      levelBadge: 'Beginner · Juniors',
+      title: 'Junior Safety Play, Baulk Contain & Rules',
+      category: 'Junior Strategy',
+      summary:
+        'Recognise when not to force a risky pot, judge containment touch speed back to baulk, and navigate Snooker, 9-Ball, and 8-Ball table rules.',
+      publishedDate: '2026-11-26',
+      content: `
+        <p class="lead text-base sm:text-lg text-slate-300 leading-relaxed mb-6">
+          Smart matchplay starts with knowing when to defend. When an open red does not sit cleanly over a pocket, a soft safety off its thin edge leaves the white in the baulk zone—making it much harder for an opponent to start a break.
+        </p>
+
+        <h2 class="font-display text-2xl font-bold text-white mt-8 mb-4">1. Playing the Baulk Containment Shot</h2>
+        <p class="text-sm text-slate-300 leading-relaxed mb-4">
+          In the automated demonstration below, observe how gentle 30% pace glides the cue ball calmly back toward the baulk D while nudging the object red away from easy middle/corner pockets.
+        </p>
+        <div class="p-4 rounded-xl bg-white/[0.04] border border-emerald-bright/25 font-mono text-xs text-emerald-bright font-bold my-4">
+          Thin Safety Edge + Gentle Speed (25–32%) = Controlled Separation
+        </div>
+
+        <h2 class="font-display text-2xl font-bold text-white mt-8 mb-4">2. Key Scoring Basics Across Disciplines</h2>
+        <ul class="list-disc list-inside space-y-2 text-sm text-slate-300 mb-6">
+          <li><strong>Snooker:</strong> Alternate Reds (1 pt) with Colors (Yellow 2, Green 3, Brown 4, Blue 5, Pink 6, Black 7), then clear colors in strict numerical order.</li>
+          <li><strong>9-Ball Pool:</strong> You must contact the lowest-numbered ball on the table first; pocketing the 9-ball legally wins the rack.</li>
+          <li><strong>8-Ball Pool:</strong> Claim either Solids (1–7) or Stripes (9–15) after an open break, then pot the 8-ball last.</li>
+        </ul>
+      `,
+    },
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // INTERMEDIATE TRACK
+    // ═══════════════════════════════════════════════════════════════════════
+    {
+      slug: 'topspin-and-backspin',
+      tier: 'intermediate',
+      levelBadge: 'Intermediate · Club',
+      title: 'Topspin (Follow) and Backspin (Screw)',
+      category: 'Spin Ballistics',
+      summary: 'How vertical tip offset translates into angular torque, and why screw-back shots exhibit delayed backwards acceleration.',
+      publishedDate: '2026-11-18',
+      content: `
+        <p class="lead text-base sm:text-lg text-ivory-muted leading-relaxed mb-6">
+          The vertical position where the cue tip contacts the ball determines pitch angular momentum.
+        </p>
+
+        <h2 class="font-serif text-2xl font-bold text-ivory-text mt-8 mb-4">1. The Screw-Back Paradox</h2>
+        <p class="text-sm text-ivory-muted leading-relaxed mb-4">
+          Why does a screw shot move forward before suddenly reversing? While sliding across the cloth, the ball travels forward under linear momentum despite spinning backwards. Only when forward momentum is removed by impacting the object ball does the backspin bite and reverse the cue ball.
+        </p>
+
+        <h2 class="font-display text-2xl font-bold text-white mt-8 mb-4">2. Topspin Follow Curves Past the 90° Tangent</h2>
+        <p class="text-sm text-slate-300 leading-relaxed mb-6">
+          By striking above equator (+0.78 Y), overspin immediately re-accelerates the cue ball forward along the shot line after impact, bending its post-collision path smoothly through the tangent line toward middle-pocket or black-spot shape.
+        </p>
+      `,
+    },
+    {
+      slug: 'cushion-rebounds',
+      tier: 'intermediate',
+      levelBadge: 'Intermediate · Club',
+      title: 'Cushion Rebounds & Multi-Angle Escapes',
+      category: 'Geometry',
+      summary: 'The coefficient of normal restitution, tangent friction of rubber cushions, and systematic calculation of two- and three-cushion escape paths.',
+      publishedDate: '2026-11-18',
+      content: `
+        <p class="lead text-base sm:text-lg text-ivory-muted leading-relaxed mb-6">
+          Cushions in championship snooker are not perfect mathematical mirrors. Understanding energy loss and angle deflection is critical for escape shots.
+        </p>
+
+        <h2 class="font-serif text-2xl font-bold text-ivory-text mt-8 mb-4">1. Normal Restitution & Energy Loss</h2>
+        <p class="text-sm text-ivory-muted leading-relaxed mb-4">
+          Championship rubber cushions possess a coefficient of restitution between 0.68 and 0.75. This means normal velocity is reduced by roughly 30% upon each rebound:
+        </p>
+        <div class="p-4 rounded-xl bg-surface-card border border-surface-subtle font-mono text-xs text-brass-primary my-4">
+          v'<sub>n</sub> = -e<sub>c</sub> &middot; v<sub>n</sub> &nbsp;&bull;&nbsp; e<sub>c</sub> &approx; 0.72
+        </div>
+
+        <h2 class="font-serif text-2xl font-bold text-ivory-text mt-8 mb-4">2. Multi-Cushion Diamond System</h2>
+        <p class="text-sm text-ivory-muted leading-relaxed mb-6">
+          By dividing the table rails into proportional quadrants, players can calculate rebound trajectories for escaping tight snookers behind the baulk colors.
+        </p>
+      `,
+    },
+    {
+      slug: 'speed-and-distance',
+      tier: 'intermediate',
+      levelBadge: 'Intermediate · Club',
+      title: 'Speed, Distance & Rolling Resistance',
+      category: 'Friction Dynamics',
+      summary: 'Calculating stopping distances on championship Strachan baize cloth based on initial cue impulse velocity.',
+      publishedDate: '2026-11-18',
+      content: `
+        <p class="lead text-base sm:text-lg text-ivory-muted leading-relaxed mb-6">
+          A ball rolling on championship Strachan No. 10 cloth experiences a nearly constant rolling deceleration of approximately 0.15 m/s².
+        </p>
+
+        <h2 class="font-serif text-2xl font-bold text-ivory-text mt-8 mb-4">1. Stopping Distance Formula</h2>
+        <p class="text-sm text-ivory-muted leading-relaxed mb-4">
+          From classical work-energy relations, the stopping distance is proportional to the square of initial strike velocity:
+        </p>
+        <div class="p-4 rounded-xl bg-surface-card border border-surface-subtle font-mono text-xs text-brass-primary my-4">
+          d = v<sub>0</sub><sup>2</sup> / (2 &middot; &mu;<sub>r</sub> &middot; g)
+        </div>
+        <p class="text-sm text-ivory-muted leading-relaxed mb-6">
+          Doubling shot power quadruples the distance the ball travels! Fine control over cue power is essential for featherweight position play.
+        </p>
+      `,
+    },
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // EXPERT TRACK
+    // ═══════════════════════════════════════════════════════════════════════
+    {
       slug: 'side-spin-ballistics',
+      tier: 'expert',
+      levelBadge: 'Expert · Tournament',
       title: 'Side Spin, Swerve & Cushion Bite',
       category: 'Rotational Dynamics',
       summary: 'Understand running english versus check english, the physics of cue deflection (squirt), and how side spin modifies cushion rebound angles.',
@@ -69,32 +225,9 @@ export async function getStaticPaths() {
       `,
     },
     {
-      slug: 'cushion-rebounds',
-      title: 'Cushion Rebounds & Multi-Angle Escapes',
-      category: 'Geometry',
-      summary: 'The coefficient of normal restitution, tangent friction of rubber cushions, and systematic calculation of two- and three-cushion escape paths.',
-      publishedDate: '2026-11-18',
-      content: `
-        <p class="lead text-base sm:text-lg text-ivory-muted leading-relaxed mb-6">
-          Cushions in championship snooker are not perfect mathematical mirrors. Understanding energy loss and angle deflection is critical for escape shots.
-        </p>
-
-        <h2 class="font-serif text-2xl font-bold text-ivory-text mt-8 mb-4">1. Normal Restitution & Energy Loss</h2>
-        <p class="text-sm text-ivory-muted leading-relaxed mb-4">
-          Championship rubber cushions possess a coefficient of restitution between 0.68 and 0.75. This means normal velocity is reduced by roughly 30% upon each rebound:
-        </p>
-        <div class="p-4 rounded-xl bg-surface-card border border-surface-subtle font-mono text-xs text-brass-primary my-4">
-          v'<sub>n</sub> = -e<sub>c</sub> &middot; v<sub>n</sub> &nbsp;&bull;&nbsp; e<sub>c</sub> &approx; 0.72
-        </div>
-
-        <h2 class="font-serif text-2xl font-bold text-ivory-text mt-8 mb-4">2. Multi-Cushion Diamond System</h2>
-        <p class="text-sm text-ivory-muted leading-relaxed mb-6">
-          By dividing the table rails into proportional quadrants, players can calculate rebound trajectories for escaping tight snookers behind the baulk colors.
-        </p>
-      `,
-    },
-    {
       slug: 'collision-angles',
+      tier: 'expert',
+      levelBadge: 'Expert · Tournament',
       title: 'Ball Collision Angles & The 90° Tangent Rule',
       category: 'Collision Mechanics',
       summary: 'Why frictionless equal-mass spheres separate at exactly 90 degrees, and how cut-induced throw imparts unexpected spin to object balls.',
@@ -116,54 +249,52 @@ export async function getStaticPaths() {
       `,
     },
     {
-      slug: 'speed-and-distance',
-      title: 'Speed, Distance & Rolling Resistance',
-      category: 'Friction Dynamics',
-      summary: 'Calculating stopping distances on championship Strachan baize cloth based on initial cue impulse velocity.',
-      publishedDate: '2026-11-18',
+      slug: 'advanced-masse-and-escapes',
+      tier: 'expert',
+      levelBadge: 'Expert · Tournament',
+      title: 'Tournament Escapes, Running English & Masse Swerve',
+      category: 'Advanced Ballistics',
+      summary:
+        'Synthesize mirror cushion lines, tangential running English, and cue-butt elevation swerve to bend out of tight tournament snookers.',
+      publishedDate: '2026-11-26',
       content: `
-        <p class="lead text-base sm:text-lg text-ivory-muted leading-relaxed mb-6">
-          A ball rolling on championship Strachan No. 10 cloth experiences a nearly constant rolling deceleration of approximately 0.15 m/s².
+        <p class="lead text-base sm:text-lg text-slate-300 leading-relaxed mb-6">
+          When directly snookered behind a high-value color, top professionals rely on two geometric weapons: spin-altered cushion exits and butt-elevated swerve (masse) curves.
         </p>
 
-        <h2 class="font-serif text-2xl font-bold text-ivory-text mt-8 mb-4">1. Stopping Distance Formula</h2>
-        <p class="text-sm text-ivory-muted leading-relaxed mb-4">
-          From classical work-energy relations, the stopping distance is proportional to the square of initial strike velocity:
+        <h2 class="font-display text-2xl font-bold text-white mt-8 mb-4">1. Running English on Tight Cushion Escapes</h2>
+        <p class="text-sm text-slate-300 leading-relaxed mb-4">
+          If the mirror path clips too steeply toward the obstructing ball, applying running English adds lateral tangential impulse during cushion contact—opening up tighter acute angles toward the shielded red.
         </p>
-        <div class="p-4 rounded-xl bg-surface-card border border-surface-subtle font-mono text-xs text-brass-primary my-4">
-          d = v<sub>0</sub><sup>2</sup> / (2 &middot; &mu;<sub>r</sub> &middot; g)
+
+        <h2 class="font-display text-2xl font-bold text-white mt-8 mb-4">2. Why Butt Elevation Bends the Path</h2>
+        <div class="p-4 rounded-xl bg-white/[0.04] border border-emerald-bright/25 font-mono text-xs text-emerald-bright font-bold my-4">
+          a<sub>swerve</sub> &prop; &mu;<sub>cloth</sub> &middot; sin(&theta;<sub>butt</sub>) &middot; &omega;<sub>side</sub>
         </div>
-        <p class="text-sm text-ivory-muted leading-relaxed mb-6">
-          Doubling shot power quadruples the distance the ball travels! Fine control over cue power is essential for featherweight position play.
-        </p>
-      `,
-    },
-    {
-      slug: 'topspin-and-backspin',
-      title: 'Topspin (Follow) and Backspin (Screw)',
-      category: 'Spin Ballistics',
-      summary: 'How vertical tip offset translates into angular torque, and why screw-back shots exhibit delayed backwards acceleration.',
-      publishedDate: '2026-11-18',
-      content: `
-        <p class="lead text-base sm:text-lg text-ivory-muted leading-relaxed mb-6">
-          The vertical position where the cue tip contacts the ball determines pitch angular momentum.
-        </p>
-
-        <h2 class="font-serif text-2xl font-bold text-ivory-text mt-8 mb-4">1. The Screw-Back Paradox</h2>
-        <p class="text-sm text-ivory-muted leading-relaxed mb-4">
-          Why does a screw shot move forward before suddenly reversing? While sliding across the cloth, the ball travels forward under linear momentum despite spinning backwards. Only when forward momentum is removed by impacting the object ball does the backspin bite and reverse the cue ball.
+        <p class="text-sm text-slate-300 leading-relaxed mb-6">
+          Raising the butt tilts the side-spin axis downward toward the felt. As cloth sliding friction acts against that angled rotation vector, a continuous lateral curve accelerates the white smoothly around intervening obstacles.
         </p>
       `,
     },
   ];
 
-  return articles.map((article) => ({
+  return articles.map((article, idx) => ({
     params: { slug: article.slug },
-    props: { article },
+    props: {
+      article,
+      prevArticle: idx > 0 ? { slug: articles[idx - 1].slug, title: articles[idx - 1].title } : null,
+      nextArticle: idx < articles.length - 1 ? { slug: articles[idx + 1].slug, title: articles[idx + 1].title } : null,
+    },
   }));
 }
 
-const { article } = Astro.props;
+const { article, prevArticle, nextArticle } = Astro.props;
+const tierPillClass =
+  article.tier === 'beginner'
+    ? 'bg-emerald-500/15 border-emerald-400/35 text-emerald-bright'
+    : article.tier === 'intermediate'
+      ? 'bg-sky-500/15 border-sky-400/35 text-sky-300'
+      : 'bg-amber-500/15 border-amber-400/35 text-amber-300';
 ---
 
 <BaseLayout
@@ -192,16 +323,31 @@ const { article } = Astro.props;
       aria-hidden="true"
     />
 
-    <article class="max-w-4xl mx-auto px-4 sm:px-6 py-16 relative z-10">
+    <article class="max-w-4xl mx-auto px-4 sm:px-6 py-14 sm:py-16 relative z-10">
       {/* Navigation Breadcrumb */}
-      <div class="flex items-center gap-2 text-xs font-mono text-slate-400 mb-8">
-        <a href="/learn" class="hover:text-emerald-bright transition-colors">Learning Center</a>
-        <span>/</span>
-        <span class="text-emerald-bright font-bold">{article.category}</span>
+      <div class="flex flex-wrap items-center justify-between gap-3 text-xs font-mono text-slate-400 mb-7">
+        <div class="flex items-center gap-2">
+          <a href={`/learn?level=${article.tier}`} class="hover:text-emerald-bright transition-colors">
+            Learning Center
+          </a>
+          <span>/</span>
+          <span class={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${tierPillClass}`}>
+            {article.levelBadge}
+          </span>
+          <span class="hidden sm:inline text-slate-500">&bull;</span>
+          <span class="hidden sm:inline text-sky-400">{article.category}</span>
+        </div>
+
+        <a
+          href="#interactive-teaching-lab"
+          class="px-3 py-1 rounded-full bg-emerald-bright/15 hover:bg-emerald-bright/25 border border-emerald-bright/30 text-emerald-bright text-[11px] font-bold transition-colors"
+        >
+          Automated Gameplay Scene &darr;
+        </a>
       </div>
 
       {/* Header */}
-      <header class="mb-10 pb-8 border-b border-white/[0.1]">
+      <header class="mb-9 pb-7 border-b border-white/[0.1]">
         <h1 class="font-display text-3xl sm:text-5xl font-bold text-white leading-tight mb-4">
           {article.title}
         </h1>
@@ -210,9 +356,12 @@ const { article } = Astro.props;
         </p>
       </header>
 
+      {/* Automated Teaching Gameplay Scene & Interactive Sandbox right at top/bottom workflow */}
+      <LessonPlayLab client:visible scenarioSlug={article.slug} />
+
       {/* Content Body rendered cleanly on Obsidian Glass surface */}
       <div
-        class="article-body space-y-4 text-slate-300 leading-relaxed bg-[#080C12]/75 backdrop-blur-xl border border-white/[0.1] rounded-3xl p-6 sm:p-8 shadow-xl"
+        class="article-body space-y-4 text-slate-300 leading-relaxed bg-[#080C12]/75 backdrop-blur-xl border border-white/[0.1] rounded-3xl p-6 sm:p-8 shadow-xl mt-8"
         set:html={article.content
           .replaceAll('text-ivory-text', 'text-white')
           .replaceAll('text-ivory-muted', 'text-slate-300')
@@ -222,8 +371,32 @@ const { article } = Astro.props;
           .replaceAll('font-serif', 'font-display')}
       />
 
-      {/* Interactive Lecture Playable Simulator matching this article */}
-      <LessonPlayLab client:visible scenarioSlug={article.slug} />
+      {/* Previous / Next Lecture Navigation */}
+      <div class="mt-10 grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {prevArticle ? (
+          <a
+            href={`/learn/${prevArticle.slug}`}
+            class="p-4 rounded-2xl bg-[#080C12]/80 border border-white/[0.1] hover:border-emerald-bright/50 transition-colors"
+          >
+            <span class="block text-[10px] font-mono uppercase tracking-wider text-slate-400 mb-1">
+              &larr; Previous Lecture
+            </span>
+            <span class="font-display text-sm font-bold text-white">{prevArticle.title}</span>
+          </a>
+        ) : <div />}
+
+        {nextArticle ? (
+          <a
+            href={`/learn/${nextArticle.slug}`}
+            class="p-4 rounded-2xl bg-[#080C12]/80 border border-white/[0.1] hover:border-emerald-bright/50 transition-colors sm:text-right"
+          >
+            <span class="block text-[10px] font-mono uppercase tracking-wider text-emerald-bright mb-1">
+              Next Lecture &rarr;
+            </span>
+            <span class="font-display text-sm font-bold text-white">{nextArticle.title}</span>
+          </a>
+        ) : <div />}
+      </div>
     </article>
   </div>
 </BaseLayout>

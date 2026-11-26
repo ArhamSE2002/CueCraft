@@ -66,7 +66,7 @@ const useDarkChrome = isSimulator || darkScene;
   </head>
 
   <body class={isSimulator
-    ? 'h-screen max-h-screen overflow-hidden flex flex-col bg-arena-bg text-arena-text antialiased'
+    ? 'min-h-screen overflow-y-auto lg:h-screen lg:max-h-screen lg:overflow-hidden flex flex-col bg-arena-bg text-arena-text antialiased'
     : darkScene
       ? 'min-h-screen flex flex-col bg-[#05080C] text-white antialiased'
       : 'min-h-screen flex flex-col bg-studio-bg text-studio-ink antialiased'}>
@@ -124,11 +124,11 @@ const useDarkChrome = isSimulator || darkScene;
         </nav>
 
         {/* Primary CTA */}
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2 sm:gap-3">
           {!isSimulator ? (
             <a
               href="/play"
-              class={`px-4 py-2 rounded-full font-semibold text-xs tracking-wide transition-all active:scale-95 flex items-center gap-1.5 ${
+              class={`px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-full font-semibold text-xs tracking-wide transition-all active:scale-95 flex items-center gap-1.5 ${
                 useDarkChrome
                   ? 'bg-emerald-bright hover:bg-emerald text-arena-bg hover:text-white font-bold shadow-brass-glow'
                   : 'bg-emerald hover:bg-emerald-dark text-white shadow-sm hover:shadow-md'
@@ -139,18 +139,47 @@ const useDarkChrome = isSimulator || darkScene;
             </a>
           ) : (
             <a
-              href="/lessons"
+              href="/learn"
               class="px-3.5 py-1.5 rounded-full bg-arena-panel hover:bg-arena-elevated border border-arena-border text-arena-text font-medium text-xs transition-colors"
             >
-              Drills &rarr;
+              Lectures &rarr;
             </a>
           )}
         </div>
       </div>
+
+      {/* Mobile Compact Navigation Strip (non-simulator routes) */}
+      {!isSimulator && (
+        <nav class={`md:hidden flex items-center gap-1.5 overflow-x-auto px-4 py-2 border-t text-[11px] font-medium ${
+          useDarkChrome
+            ? 'border-white/[0.06] bg-[#05080C]/90'
+            : 'border-studio-border bg-studio-paper/90'
+        }`}>
+          {siteConfig.navLinks.map((link) => {
+            const isActive = currentPath === link.href || (link.href !== '/' && currentPath.startsWith(link.href));
+            return (
+              <a
+                href={link.href}
+                class={`shrink-0 px-3 py-1 rounded-full transition-colors ${
+                  isActive
+                    ? useDarkChrome
+                      ? 'bg-emerald-bright text-arena-bg font-bold'
+                      : 'bg-studio-ink text-white font-semibold'
+                    : useDarkChrome
+                      ? 'bg-white/[0.04] text-slate-300'
+                      : 'text-studio-sub'
+                }`}
+              >
+                {link.title}
+              </a>
+            );
+          })}
+        </nav>
+      )}
     </header>
 
     {/* Page Slot */}
-    <main class={isSimulator ? 'flex-1 min-h-0 overflow-hidden flex flex-col' : 'flex-1 relative z-10'}>
+    <main class={isSimulator ? 'flex-1 min-h-0 lg:overflow-hidden flex flex-col' : 'flex-1 relative z-10'}>
       <slot />
     </main>
 

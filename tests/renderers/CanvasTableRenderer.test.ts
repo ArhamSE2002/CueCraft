@@ -10,6 +10,8 @@ describe('CanvasTableRenderer Coordinate Space & Transforms', () => {
       resetTransform: () => {},
       scale: () => {},
       clearRect: () => {},
+      save: () => {},
+      restore: () => {},
       beginPath: () => {},
       moveTo: () => {},
       lineTo: () => {},
@@ -75,5 +77,24 @@ describe('CanvasTableRenderer Coordinate Space & Transforms', () => {
 
     // Aspect ratio W / H must be exactly equal to 3569 / 1778 ≈ 2.007
     expect(renderedWidth / renderedHeight).toBeCloseTo(SnookerTable.LENGTH / SnookerTable.WIDTH, 2);
+  });
+
+  it('distinguishes pointers inside the table bounds from surrounding dark arena', () => {
+    // Tall mobile-like canvas (400 x 700) leaves top/bottom empty margins around 2:1 table
+    const canvas = createMockCanvas(400, 700);
+    const renderer = new CanvasTableRenderer(canvas);
+    const table = new SnookerTable('snooker');
+    renderer.updateDpi(1, 0, 0, table);
+
+    const bounds = renderer.getTableScreenBounds(table);
+    const centerX = (bounds.left + bounds.right) * 0.5;
+    const centerY = (bounds.top + bounds.bottom) * 0.5;
+
+    expect(renderer.isScreenPointOnTable(centerX, centerY, table)).toBe(true);
+    expect(renderer.isScreenPointOnTable(bounds.left + 2, bounds.top + 2, table)).toBe(true);
+    // Above the top rail (webpage scroll margin)
+    expect(renderer.isScreenPointOnTable(centerX, bounds.top - 15, table)).toBe(false);
+    // Below the bottom rail (webpage scroll margin)
+    expect(renderer.isScreenPointOnTable(centerX, bounds.bottom + 15, table)).toBe(false);
   });
 });

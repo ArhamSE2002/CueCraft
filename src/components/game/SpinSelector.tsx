@@ -51,6 +51,7 @@ export const SpinSelector: React.FC = () => {
     };
     const onTouchMove = (e: TouchEvent) => {
       if (isDragging && e.touches[0]) {
+        e.preventDefault();
         handlePointer(e.touches[0].clientX, e.touches[0].clientY);
       }
     };
@@ -59,7 +60,7 @@ export const SpinSelector: React.FC = () => {
     if (isDragging) {
       window.addEventListener('mousemove', onMouseMove);
       window.addEventListener('mouseup', onEnd);
-      window.addEventListener('touchmove', onTouchMove);
+      window.addEventListener('touchmove', onTouchMove, { passive: false });
       window.addEventListener('touchend', onEnd);
     }
 
@@ -94,7 +95,7 @@ export const SpinSelector: React.FC = () => {
   const safeCirclePct = Math.round(maxOffset * 100);
 
   return (
-    <div className="flex flex-col items-center bg-arena-panel border border-arena-border p-2.5 rounded-2xl w-full max-w-[235px]">
+    <div className="flex flex-col items-center bg-[#080D13]/95 border border-white/[0.1] p-2.5 sm:p-3 rounded-2xl w-full lg:max-w-[248px] shadow-inner">
       <div className="flex items-center justify-between w-full mb-1">
         <span className="text-[10px] font-mono uppercase tracking-wider font-semibold text-emerald-bright">
           Spin &amp; Angle
@@ -132,6 +133,7 @@ export const SpinSelector: React.FC = () => {
           onTouchStart={onTouchStart}
           className="relative w-20 h-20 rounded-full cursor-crosshair select-none shadow-felt-inset border border-brass-muted/40 flex items-center justify-center overflow-hidden shrink-0"
           style={{
+            touchAction: 'none',
             background:
               'radial-gradient(circle at 35% 35%, #FFFFFF 0%, #F5F2EB 50%, #C4BDB0 85%, #8A8172 100%)',
           }}

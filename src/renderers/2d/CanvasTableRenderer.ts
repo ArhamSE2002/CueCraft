@@ -115,6 +115,49 @@ export class CanvasTableRenderer {
   }
 
   /**
+   * Returns outer wooden-rail screen-space rectangle of the rendered table.
+   */
+  public getTableScreenBounds(table?: SnookerTable): {
+    left: number;
+    top: number;
+    right: number;
+    bottom: number;
+    railMarginPx: number;
+  } {
+    const len = table ? table.length : this.activeTableLength;
+    const wid = table ? table.width : this.activeTableWidth;
+    const ballRadius = table ? table.ballRadius : 26.25;
+    const railMarginPx = Math.max(46, ballRadius * 2.1) * this.scale;
+    return {
+      left: this.offsetX - railMarginPx,
+      top: this.offsetY - railMarginPx,
+      right: this.offsetX + len * this.scale + railMarginPx,
+      bottom: this.offsetY + wid * this.scale + railMarginPx,
+      railMarginPx,
+    };
+  }
+
+  /**
+   * Returns true only when client pointer coordinates land inside the table rails/surface.
+   */
+  public isScreenPointOnTable(
+    clientX: number,
+    clientY: number,
+    table?: SnookerTable
+  ): boolean {
+    const rect = this.canvas.getBoundingClientRect();
+    const localX = clientX - rect.left;
+    const localY = clientY - rect.top;
+    const bounds = this.getTableScreenBounds(table);
+    return (
+      localX >= bounds.left &&
+      localX <= bounds.right &&
+      localY >= bounds.top &&
+      localY <= bounds.bottom
+    );
+  }
+
+  /**
    * Main render pass.
    */
   public render(
@@ -143,7 +186,10 @@ export class CanvasTableRenderer {
 
     ctx.clearRect(0, 0, width, height);
 
-    // 1. Draw Outer Wood Rail & Accents
+    // 0. Studio Arena Crucible Lighting Backdrop
+    this.drawArenaBackdrop(width, height, table);
+
+    // 1. Draw Outer Wood Rail & Brass Accents
     this.drawTableRails(table);
 
     // 2. Draw Baize Cloth & Variant Markings
@@ -183,6 +229,35 @@ export class CanvasTableRenderer {
     }
   }
 
+  private drawArenaBackdrop(width: number, height: number, table: SnookerTable): void {
+    const ctx = this.ctx;
+    const bgGrad = ctx.createRadialGradient(
+      width * 0.5,
+      height * 0.48,
+      Math.min(width, height) * 0.12,
+      width * 0.5,
+      height * 0.5,
+      Math.max(width, height) * 0.85
+    );
+    bgGrad.addColorStop(0, '#0D151D');
+    bgGrad.addColorStop(0.55, '#070B10');
+    bgGrad.addColorStop(1, '#040609');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, width, height);
+
+    // Subtle overhead canopy ambient halo centered directly over table bounds
+    const bounds = this.getTableScreenBounds(table);
+    const cx = (bounds.left + bounds.right) * 0.5;
+    const cy = (bounds.top + bounds.bottom) * 0.5;
+    const haloRadius = Math.max(bounds.right - bounds.left, bounds.bottom - bounds.top) * 0.7;
+    const halo = ctx.createRadialGradient(cx, cy, haloRadius * 0.12, cx, cy, haloRadius);
+    halo.addColorStop(0, 'rgba(16, 185, 129, 0.10)');
+    halo.addColorStop(0.55, 'rgba(56, 189, 248, 0.04)');
+    halo.addColorStop(1, 'rgba(4, 6, 9, 0)');
+    ctx.fillStyle = halo;
+    ctx.fillRect(0, 0, width, height);
+  }
+
   private drawTableRails(table: SnookerTable): void {
     const ctx = this.ctx;
     const margin = Math.max(46, table.ballRadius * 2.1) * this.scale;
@@ -190,22 +265,64 @@ export class CanvasTableRenderer {
     const y0 = this.offsetY - margin;
     const railW = table.length * this.scale + margin * 2;
     const railH = table.width * this.scale + margin * 2;
+    const radius = Math.max(6, 16 * this.scale);
+
+    // Table chassis depth shadow onto studio floor
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.82)';
+    ctx.shadowBlur = Math.max(12, 28 * this.scale);
+    ctx.shadowOffsetY = Math.max(4, 9 * this.scale);
 
     // Outer hardwood rail adapted per game table
     const woodGrad = ctx.createLinearGradient(x0, y0, x0 + railW, y0 + railH);
     woodGrad.addColorStop(0, table.railHex);
-    woodGrad.addColorStop(0.5, table.variant === 'snooker' ? '#4C2612' : '#26303D');
-    woodGrad.addColorStop(1, '#120B08');
+    woodGrad.addColorStop(0.45, table.variant === 'snooker' ? '#562B14' : '#2E3A4A');
+    woodGrad.addColorStop(1, '#100907');
 
     ctx.fillStyle = woodGrad;
     ctx.beginPath();
-    ctx.roundRect(x0, y0, railW, railH, 16 * this.scale);
+    ctx.roundRect(x0, y0, railW, railH, radius);
     ctx.fill();
+    ctx.restore();
 
-    // Subtle brass bevel edge
-    ctx.strokeStyle = table.variant === 'snooker' ? '#6D3A1D' : '#475569';
-    ctx.lineWidth = Math.max(1.5, 2.2 * this.scale);
+    // Specular outer rim bevel
+    ctx.strokeStyle = table.variant === 'snooker' ? 'rgba(214, 178, 101, 0.45)' : 'rgba(148, 163, 184, 0.35)';
+    ctx.lineWidth = Math.max(1.2, 2 * this.scale);
+    ctx.beginPath();
+    ctx.roundRect(x0, y0, railW, railH, radius);
     ctx.stroke();
+
+    // Brushed Brass Corner Plates & Middle Pocket Bevels
+    const cornerSize = margin * 0.86;
+    const brassPlateGrad = ctx.createLinearGradient(x0, y0, x0 + cornerSize, y0 + cornerSize);
+    brassPlateGrad.addColorStop(0, '#E3C57E');
+    brassPlateGrad.addColorStop(0.5, '#B68F40');
+    brassPlateGrad.addColorStop(1, '#785A22');
+    ctx.fillStyle = table.variant === 'snooker' ? brassPlateGrad : 'rgba(148, 163, 184, 0.32)';
+
+    const drawCornerBracket = (cx: number, cy: number, sx: number, sy: number) => {
+      ctx.beginPath();
+      ctx.roundRect(cx, cy, cornerSize, cornerSize, radius * 0.45);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+      ctx.lineWidth = Math.max(0.8, 1.2 * this.scale);
+      ctx.stroke();
+      void sx;
+      void sy;
+    };
+    drawCornerBracket(x0 + 2 * this.scale, y0 + 2 * this.scale, 1, 1);
+    drawCornerBracket(x0 + railW - cornerSize - 2 * this.scale, y0 + 2 * this.scale, -1, 1);
+    drawCornerBracket(x0 + 2 * this.scale, y0 + railH - cornerSize - 2 * this.scale, 1, -1);
+    drawCornerBracket(x0 + railW - cornerSize - 2 * this.scale, y0 + railH - cornerSize - 2 * this.scale, -1, -1);
+
+    // Side center pocket brass plates
+    const midX = this.offsetX + (table.length * this.scale) * 0.5;
+    const plateW = margin * 0.92;
+    const plateH = margin * 0.42;
+    ctx.beginPath();
+    ctx.roundRect(midX - plateW * 0.5, y0 + 2 * this.scale, plateW, plateH, 4 * this.scale);
+    ctx.roundRect(midX - plateW * 0.5, y0 + railH - plateH - 2 * this.scale, plateW, plateH, 4 * this.scale);
+    ctx.fill();
 
     // Pool Rail Diamond Sights (9-Ball / 8-Ball)
     if (table.hasDiamonds) {
@@ -324,7 +441,7 @@ export class CanvasTableRenderer {
     const baizeGrad = ctx.createRadialGradient(
       x + w * 0.5,
       y + h * 0.5,
-      h * 0.18,
+      h * 0.14,
       x + w * 0.5,
       y + h * 0.5,
       w * 0.72
@@ -336,14 +453,29 @@ export class CanvasTableRenderer {
     ctx.fillStyle = baizeGrad;
     ctx.fillRect(x, y, w, h);
 
-    // Inner cushion shadow
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.42)';
-    ctx.lineWidth = Math.max(2, 4 * this.scale);
+    // Subtle overhead studio light bloom in center of felt
+    const centerLight = ctx.createRadialGradient(
+      x + w * 0.5,
+      y + h * 0.5,
+      h * 0.05,
+      x + w * 0.5,
+      y + h * 0.5,
+      w * 0.52
+    );
+    centerLight.addColorStop(0, 'rgba(255, 255, 255, 0.065)');
+    centerLight.addColorStop(0.6, 'rgba(255, 255, 255, 0.015)');
+    centerLight.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = centerLight;
+    ctx.fillRect(x, y, w, h);
+
+    // Inner cushion ambient occlusion shadow
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+    ctx.lineWidth = Math.max(2, 4.5 * this.scale);
     ctx.strokeRect(x, y, w, h);
 
     // Baulk / Head String Line
     const baulkScreenX = this.offsetX + table.baulkDist * this.scale;
-    ctx.strokeStyle = 'rgba(245, 242, 235, 0.38)';
+    ctx.strokeStyle = 'rgba(245, 242, 235, 0.42)';
     ctx.lineWidth = Math.max(1, 1.5 * this.scale);
     ctx.beginPath();
     ctx.moveTo(baulkScreenX, y);
@@ -360,14 +492,14 @@ export class CanvasTableRenderer {
     }
 
     // Spot markings (Snooker all spots; Pool center + foot spot)
-    ctx.fillStyle = 'rgba(245, 242, 235, 0.55)';
+    ctx.fillStyle = 'rgba(245, 242, 235, 0.62)';
     const spotList = table.hasBaulkAndD
       ? Object.values(table.spots)
       : [table.spots.BLUE, table.spots.PINK];
     for (const sp of spotList) {
       const spotPos = this.toScreen(sp);
       ctx.beginPath();
-      ctx.arc(spotPos.x, spotPos.y, Math.max(1.8, 3 * this.scale), 0, Math.PI * 2);
+      ctx.arc(spotPos.x, spotPos.y, Math.max(1.8, 3.1 * this.scale), 0, Math.PI * 2);
       ctx.fill();
     }
   }
@@ -379,22 +511,27 @@ export class CanvasTableRenderer {
       const p = this.toScreen(pocket.position);
       const r = pocket.radius * this.scale;
 
-      // Dark leather drop opening
-      const pocketGrad = ctx.createRadialGradient(p.x, p.y, r * 0.2, p.x, p.y, r);
-      pocketGrad.addColorStop(0, '#020304');
-      pocketGrad.addColorStop(0.8, '#0A0C0E');
-      pocketGrad.addColorStop(1, '#1A1816');
+      // Dark leather drop opening with recessed shadow
+      const pocketGrad = ctx.createRadialGradient(p.x, p.y, r * 0.18, p.x, p.y, r);
+      pocketGrad.addColorStop(0, '#010203');
+      pocketGrad.addColorStop(0.76, '#090C0F');
+      pocketGrad.addColorStop(1, '#1E1B18');
 
       ctx.fillStyle = pocketGrad;
       ctx.beginPath();
       ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
       ctx.fill();
 
-      // Brass pocket plate trim
-      ctx.strokeStyle = '#C5A059';
-      ctx.lineWidth = 2.5 * this.scale;
+      // Inner leather pocket rim
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.72)';
+      ctx.lineWidth = Math.max(1, 2 * this.scale);
+      ctx.stroke();
+
+      // Brushed brass pocket plate trim
+      ctx.strokeStyle = '#C9A45A';
+      ctx.lineWidth = Math.max(1.5, 2.5 * this.scale);
       ctx.beginPath();
-      ctx.arc(p.x, p.y, r * 1.05, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, r * 1.06, 0, Math.PI * 2);
       ctx.stroke();
     }
   }

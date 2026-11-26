@@ -2,60 +2,143 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 
 const modules = [
+  // ── BEGINNER / JUNIORS TRACK ──────────────────────────────────────────
   {
-    slug: 'cue-ball-control',
+    slug: 'straight-potting-fundamentals',
     number: '01',
-    title: 'Understanding Cue-Ball Control & Stun',
-    category: 'Kinematics',
-    summary: 'Master the sliding-to-rolling friction transition, dead-stop stun shots, and the fundamental physics of potting without cue-ball drift.',
-    readingTime: '6 min read',
+    tier: 'beginner',
+    levelLabel: 'Beginner · Juniors',
+    title: 'Junior Guide: Ghost-Ball Aim & Straight Potting',
+    category: 'Junior Fundamentals',
+    summary:
+      'Visualise the exact Ghost Ball contact spot, deliver a calm straight cue stroke without unwanted side spin, and pocket center-line balls consistently.',
+    readingTime: '5 min + Auto Scene',
   },
   {
-    slug: 'side-spin-ballistics',
+    slug: 'cue-ball-control',
     number: '02',
-    title: 'Side Spin, Swerve & Cushion Bite',
-    category: 'Rotational Dynamics',
-    summary: 'Understand running English versus check English, cue squirt deflection, and how side spin modifies cushion rebound angles.',
-    readingTime: '8 min read',
+    tier: 'beginner',
+    levelLabel: 'Beginner · Core',
+    title: 'Understanding Cue-Ball Control & The Stun Shot',
+    category: 'Kinematics',
+    summary:
+      'Master the sliding-to-rolling friction transition, dead-stop stun shots, and the fundamental physics of potting without cue-ball drift.',
+    readingTime: '6 min + Auto Scene',
+  },
+  {
+    slug: 'junior-safety-and-rules',
+    number: '03',
+    tier: 'beginner',
+    levelLabel: 'Beginner · Juniors',
+    title: 'Junior Safety Play, Baulk Contain & Rules',
+    category: 'Junior Strategy',
+    summary:
+      'Learn gentle containment touch speed, safe return to the baulk D, and scoring rules across Snooker, 9-Ball, and 8-Ball.',
+    readingTime: '5 min + Auto Scene',
+  },
+
+  // ── INTERMEDIATE TRACK ────────────────────────────────────────────────
+  {
+    slug: 'topspin-and-backspin',
+    number: '04',
+    tier: 'intermediate',
+    levelLabel: 'Intermediate · Club',
+    title: 'Topspin (Follow) and Backspin (Screw)',
+    category: 'Spin Ballistics',
+    summary:
+      'How vertical tip offset creates angular torque and why screw-back shots exhibit delayed reversal across worsted baize.',
+    readingTime: '7 min + Auto Scene',
   },
   {
     slug: 'cushion-rebounds',
-    number: '03',
+    number: '05',
+    tier: 'intermediate',
+    levelLabel: 'Intermediate · Club',
     title: 'Cushion Rebounds & Multi-Angle Escapes',
     category: 'Geometry',
-    summary: 'Normal restitution, tangent rubber friction, and systematic calculation of two- and three-cushion escape paths.',
-    readingTime: '7 min read',
-  },
-  {
-    slug: 'collision-angles',
-    number: '04',
-    title: 'Ball Collision Angles & The 90° Rule',
-    category: 'Collision Mechanics',
-    summary: 'Why equal-mass spheres separate at 90 degrees, and how cut-induced throw imparts spin to object balls.',
-    readingTime: '5 min read',
+    summary:
+      'Normal restitution, tangent rubber friction, and systematic calculation of two- and three-cushion escape paths.',
+    readingTime: '7 min + Auto Scene',
   },
   {
     slug: 'speed-and-distance',
-    number: '05',
+    number: '06',
+    tier: 'intermediate',
+    levelLabel: 'Intermediate · Club',
     title: 'Speed, Distance & Rolling Resistance',
     category: 'Friction Dynamics',
-    summary: 'Calculating stopping distances on worsted and club baize based on initial cue impulse velocity.',
-    readingTime: '6 min read',
+    summary:
+      'Calculating stopping distances on worsted and club baize based on initial cue impulse velocity.',
+    readingTime: '6 min + Auto Scene',
+  },
+
+  // ── EXPERT TRACK ──────────────────────────────────────────────────────
+  {
+    slug: 'side-spin-ballistics',
+    number: '07',
+    tier: 'expert',
+    levelLabel: 'Expert · Tournament',
+    title: 'Side Spin, Swerve & Cushion Bite',
+    category: 'Rotational Dynamics',
+    summary:
+      'Understand running English versus check English, cue squirt deflection, and how side spin modifies cushion rebound angles.',
+    readingTime: '8 min + Auto Scene',
   },
   {
-    slug: 'topspin-and-backspin',
-    number: '06',
-    title: 'Topspin (Follow) and Backspin (Screw)',
-    category: 'Spin Ballistics',
-    summary: 'How vertical tip offset creates angular torque and why screw-back exhibits delayed reversal.',
-    readingTime: '7 min read',
+    slug: 'collision-angles',
+    number: '08',
+    tier: 'expert',
+    levelLabel: 'Expert · Tournament',
+    title: 'Ball Collision Angles & The 90° Rule',
+    category: 'Collision Mechanics',
+    summary:
+      'Why equal-mass spheres separate at 90 degrees, and how cut-induced throw imparts subtle spin to object balls on thin cuts.',
+    readingTime: '6 min + Auto Scene',
+  },
+  {
+    slug: 'advanced-masse-and-escapes',
+    number: '09',
+    tier: 'expert',
+    levelLabel: 'Expert · Tournament',
+    title: 'Tournament Escapes, Running English & Masse Swerve',
+    category: 'Advanced Ballistics',
+    summary:
+      'Combine cushion mirror lines, running side English, and elevated cue butt swerve to escape tight championship snookers.',
+    readingTime: '9 min + Auto Scene',
+  },
+];
+
+const tiers = [
+  {
+    id: 'all',
+    label: 'All Lectures',
+    count: modules.length,
+    blurb: 'Complete 9-module curriculum with live automated physics teaching demonstrations.',
+  },
+  {
+    id: 'beginner',
+    label: 'Beginner · Juniors',
+    count: modules.filter((m) => m.tier === 'beginner').length,
+    blurb: 'Ideal for juniors & newcomers: straight ghost-ball potting, dead-stop stun shots, and calm baulk safety.',
+  },
+  {
+    id: 'intermediate',
+    label: 'Intermediate · Club',
+    count: modules.filter((m) => m.tier === 'intermediate').length,
+    blurb: 'For developing club players: topspin follow, deep screw-back draw, natural cushion angles, and touch speed.',
+  },
+  {
+    id: 'expert',
+    label: 'Expert · Tournament',
+    count: modules.filter((m) => m.tier === 'expert').length,
+    blurb: 'Advanced tournament mastery: running/check English, squirt compensation, thin cut throw, and elevated masse.',
   },
 ];
 ---
 
 <BaseLayout
-  title="The Science of Snooker — Learning Center"
-  description="Master snooker and cue sports physics through guided lectures covering cue ball control, spin ballistics, cushion restitution, and collision angles."
+  title="The Science of Snooker — Tiered Learning Center"
+  description="Structured Beginner (Junior), Intermediate, and Expert cue sports lectures with automated slow-motion physics gameplay scenes."
   darkScene={true}
 >
   <div class="relative overflow-hidden">
@@ -66,49 +149,129 @@ const modules = [
       aria-hidden="true"
     />
 
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-16 relative z-10">
-      <div class="max-w-3xl mb-14">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-12 sm:py-16 relative z-10">
+      <div class="max-w-3xl mb-10">
         <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-white/[0.05] border border-white/[0.12] text-emerald-bright text-xs font-mono uppercase tracking-wider font-bold mb-5">
-          Educational Curriculum
+          Leveled Curriculum · Auto Teaching Scenes
         </div>
-        <h1 class="font-display text-4xl sm:text-6xl font-bold text-white leading-[1.04] mb-5">
-          The Science of <span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-bright to-sky-400">Cue Control</span>
+        <h1 class="font-display text-4xl sm:text-6xl font-bold text-white leading-[1.04] mb-4">
+          Learn by <span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-bright to-sky-400">Your Expertise</span>
         </h1>
         <p class="text-base sm:text-lg text-slate-300 leading-relaxed">
-          Great break-building is classical mechanics in motion. Every guide includes an interactive table drill wired directly to our deterministic engine.
+          Choose your skill tier below—whether you are a junior mastering your first straight pot or a tournament player dialing masse curves. Every lecture includes an automated slow-motion gameplay demonstration.
         </p>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {modules.map((item) => (
-          <a
-            href={`/learn/${item.slug}`}
-            class="group flex flex-col bg-[#080C12]/80 backdrop-blur-xl border border-white/[0.10] hover:border-emerald-bright/60 rounded-3xl p-6 transition-all hover:-translate-y-0.5 shadow-xl"
-          >
-            <div class="flex items-center justify-between mb-4">
-              <span class="font-mono text-xs text-emerald-bright font-bold">
+      {/* Expertise Tier Selector Tabs */}
+      <div class="mb-8 rounded-3xl bg-[#080C12]/85 border border-white/[0.1] p-3 sm:p-4 backdrop-blur-xl">
+        <div class="flex flex-wrap items-center gap-2 mb-3" role="tablist" aria-label="Expertise Level">
+          {tiers.map((tier) => (
+            <button
+              type="button"
+              data-tier-tab={tier.id}
+              data-blurb={tier.blurb}
+              class="tier-tab-btn px-4 py-2 rounded-full text-xs font-mono font-semibold border transition-all flex items-center gap-2 bg-white/[0.04] border-white/[0.1] text-slate-300 hover:text-white"
+            >
+              <span>{tier.label}</span>
+              <span class="px-1.5 py-0.5 rounded-full text-[10px] bg-black/30 text-slate-300">
+                {tier.count}
+              </span>
+            </button>
+          ))}
+        </div>
+        <p id="tier-blurb" class="text-xs sm:text-sm text-slate-300 px-1">
+          {tiers[0].blurb}
+        </p>
+      </div>
+
+      {/* Module Cards Grid */}
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="lecture-grid">
+        {modules.map((item) => {
+          const tierPillClass =
+            item.tier === 'beginner'
+              ? 'bg-emerald-500/15 border-emerald-400/35 text-emerald-bright'
+              : item.tier === 'intermediate'
+                ? 'bg-sky-500/15 border-sky-400/35 text-sky-300'
+                : 'bg-amber-500/15 border-amber-400/35 text-amber-300';
+          return (
+            <a
+              href={`/learn/${item.slug}`}
+              data-tier={item.tier}
+              class="lecture-card group flex flex-col bg-[#080C12]/80 backdrop-blur-xl border border-white/[0.10] hover:border-emerald-bright/60 rounded-3xl p-6 transition-all hover:-translate-y-0.5 shadow-xl"
+            >
+              <div class="flex items-center justify-between gap-2 mb-4">
+                <span class={`text-[10px] font-mono px-2.5 py-0.5 rounded-full font-bold border ${tierPillClass}`}>
+                  {item.levelLabel}
+                </span>
+                <span class="text-[11px] font-mono text-sky-400 px-2.5 py-0.5 rounded-full bg-white/[0.05] border border-white/[0.10]">
+                  {item.category}
+                </span>
+              </div>
+
+              <div class="text-[11px] font-mono text-slate-500 mb-1">
                 MODULE {item.number}
-              </span>
-              <span class="text-[11px] font-mono text-sky-400 px-2.5 py-0.5 rounded-full bg-white/[0.05] border border-white/[0.10]">
-                {item.category}
-              </span>
-            </div>
+              </div>
 
-            <h2 class="font-display text-xl font-bold text-white group-hover:text-emerald-bright transition-colors mb-3 leading-snug">
-              {item.title}
-            </h2>
+              <h2 class="font-display text-xl font-bold text-white group-hover:text-emerald-bright transition-colors mb-3 leading-snug">
+                {item.title}
+              </h2>
 
-            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed mb-6">
-              {item.summary}
-            </p>
+              <p class="text-xs sm:text-sm text-slate-300 leading-relaxed mb-6">
+                {item.summary}
+              </p>
 
-            <div class="mt-auto pt-4 border-t border-white/[0.08] flex items-center justify-between text-xs font-mono text-slate-400 group-hover:text-emerald-bright transition-colors font-semibold">
-              <span>{item.readingTime}</span>
-              <span class="group-hover:translate-x-1 transition-transform">&rarr;</span>
-            </div>
-          </a>
-        ))}
+              <div class="mt-auto pt-4 border-t border-white/[0.08] flex items-center justify-between text-xs font-mono text-slate-400 group-hover:text-emerald-bright transition-colors font-semibold">
+                <span>{item.readingTime}</span>
+                <span class="group-hover:translate-x-1 transition-transform">Watch &amp; Practice &rarr;</span>
+              </div>
+            </a>
+          );
+        })}
       </div>
     </div>
   </div>
+
+  <script>
+    (function () {
+      const buttons = Array.from(document.querySelectorAll('.tier-tab-btn')) as HTMLButtonElement[];
+      const cards = Array.from(document.querySelectorAll('.lecture-card')) as HTMLElement[];
+      const blurbEl = document.getElementById('tier-blurb');
+
+      function applyTier(tier: string, syncUrl: boolean) {
+        const valid = ['all', 'beginner', 'intermediate', 'expert'].includes(tier) ? tier : 'all';
+        buttons.forEach((btn) => {
+          const isMatch = btn.dataset.tierTab === valid;
+          if (isMatch) {
+            btn.classList.add('bg-emerald-bright', 'text-[#05080C]', 'border-emerald-bright', 'font-bold');
+            btn.classList.remove('bg-white/[0.04]', 'border-white/[0.1]', 'text-slate-300');
+            if (blurbEl && btn.dataset.blurb) {
+              blurbEl.textContent = btn.dataset.blurb;
+            }
+          } else {
+            btn.classList.remove('bg-emerald-bright', 'text-[#05080C]', 'border-emerald-bright', 'font-bold');
+            btn.classList.add('bg-white/[0.04]', 'border-white/[0.1]', 'text-slate-300');
+          }
+        });
+
+        cards.forEach((card) => {
+          const visible = valid === 'all' || card.dataset.tier === valid;
+          card.style.display = visible ? 'flex' : 'none';
+        });
+
+        if (syncUrl && typeof window !== 'undefined') {
+          const url = new URL(window.location.href);
+          if (valid === 'all') url.searchParams.delete('level');
+          else url.searchParams.set('level', valid);
+          window.history.replaceState({}, '', url.toString());
+        }
+      }
+
+      buttons.forEach((btn) => {
+        btn.addEventListener('click', () => applyTier(btn.dataset.tierTab || 'all', true));
+      });
+
+      const initial = new URLSearchParams(window.location.search).get('level') || 'all';
+      applyTier(initial.toLowerCase(), false);
+    })();
+  </script>
 </BaseLayout>

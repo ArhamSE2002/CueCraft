@@ -3,8 +3,19 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
 const lessons = [
   {
+    id: 'straight-potting-fundamentals',
+    tier: 'beginner',
+    level: 'Beginner · Juniors',
+    title: 'Junior Ghost-Ball Straight Pot',
+    targetZone: 'Aim Dead Center & Pot Corner Red',
+    difficulty: '1 / 5',
+    description: 'Align directly behind the Ghost Ball with pure center tip contact (0, 0) to eliminate unintended throw and cue squirt.',
+    lectureSlug: 'straight-potting-fundamentals',
+  },
+  {
     id: 'cue-ball-control',
-    level: 'Beginner',
+    tier: 'beginner',
+    level: 'Beginner · Core',
     title: 'The Dead Stop Stun',
     targetZone: 'Pot Red & Freeze Cue Ball Near Impact',
     difficulty: '1 / 5',
@@ -12,7 +23,18 @@ const lessons = [
     lectureSlug: 'cue-ball-control',
   },
   {
+    id: 'junior-safety-and-rules',
+    tier: 'beginner',
+    level: 'Beginner · Juniors',
+    title: 'Junior Baulk Safety & Contain',
+    targetZone: 'Thin Edge Clip & Return White to Baulk',
+    difficulty: '2 / 5',
+    description: 'Deliver calm containment touch speed off the edge of the open red to park safely near the baulk colors.',
+    lectureSlug: 'junior-safety-and-rules',
+  },
+  {
     id: 'topspin-and-backspin',
+    tier: 'intermediate',
     level: 'Intermediate',
     title: 'Screw Back for Black Position',
     targetZone: 'Pot Red & Draw Cue Ball Back to Center',
@@ -22,6 +44,7 @@ const lessons = [
   },
   {
     id: 'topspin-follow',
+    tier: 'intermediate',
     level: 'Intermediate',
     title: 'Topspin Follow-Through Break',
     targetZone: 'Drive Past Contact Line Toward Black',
@@ -31,7 +54,8 @@ const lessons = [
   },
   {
     id: 'cushion-rebounds',
-    level: 'Advanced',
+    tier: 'intermediate',
+    level: 'Intermediate',
     title: 'Two-Cushion Snooker Escape',
     targetZone: 'Escape Blocking Colors via Two Rails',
     difficulty: '4 / 5',
@@ -40,7 +64,8 @@ const lessons = [
   },
   {
     id: 'side-spin-ballistics',
-    level: 'Master',
+    tier: 'expert',
+    level: 'Expert',
     title: 'Running Side Cushion Drift',
     targetZone: 'Widen Rebound Angle Off Bottom Cushion',
     difficulty: '5 / 5',
@@ -48,8 +73,19 @@ const lessons = [
     lectureSlug: 'side-spin-ballistics',
   },
   {
+    id: 'advanced-masse-and-escapes',
+    tier: 'expert',
+    level: 'Expert',
+    title: 'Tournament Cushion Escape & Running English',
+    targetZone: 'Rebound Tight Off Side Rail Behind Blue',
+    difficulty: '5 / 5',
+    description: 'Combine equal-angle mirror geometry with heavy running side spin to tighten your exit out of the top rail.',
+    lectureSlug: 'advanced-masse-and-escapes',
+  },
+  {
     id: 'masse-swerve',
-    level: 'Master',
+    tier: 'expert',
+    level: 'Expert · Master',
     title: 'Elevated Masse Swerve Around Ball',
     targetZone: 'Bend Around Blocking Blue to Strike Red',
     difficulty: '5 / 5',
@@ -61,7 +97,7 @@ const lessons = [
 
 <BaseLayout
   title="Interactive Lessons & Guided Scenarios — CueCraft"
-  description="Structured cue sports drills designed to train stun, screw-back, topspin follow, and multi-cushion escapes in 2D and 3D."
+  description="Structured cue sports drills across Beginner (Juniors), Intermediate, and Expert levels loaded directly into 2D and 3D simulation."
   darkScene={true}
 >
   <div class="relative overflow-hidden">
@@ -71,63 +107,120 @@ const lessons = [
       aria-hidden="true"
     />
 
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-16 relative z-10">
-      <div class="max-w-3xl mb-14">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-12 sm:py-16 relative z-10">
+      <div class="max-w-3xl mb-10">
         <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-white/[0.05] border border-white/[0.12] text-emerald-bright text-xs font-mono uppercase tracking-wider font-bold mb-5">
           Interactive Drills
         </div>
-        <h1 class="font-display text-4xl sm:text-6xl font-bold text-white leading-[1.04] mb-5">
+        <h1 class="font-display text-4xl sm:text-6xl font-bold text-white leading-[1.04] mb-4">
           Guided <span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-bright to-sky-400">Practice Scenarios</span>
         </h1>
         <p class="text-base sm:text-lg text-slate-300 leading-relaxed">
-          Step-by-step table drills loaded directly into the deterministic 2D/3D simulator with preset ball layouts and recommended spin settings.
+          Filter drills by skill tier, preview the automated teaching scene inside its lecture, or load any layout straight into the full 2D/3D studio.
         </p>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {lessons.map((lesson) => (
-          <div class="bg-[#080C12]/80 backdrop-blur-xl border border-white/[0.10] p-6 rounded-3xl flex flex-col justify-between hover:border-emerald-bright/60 transition-all shadow-xl">
-            <div>
-              <div class="flex items-center justify-between mb-3">
-                <span class="text-xs font-mono px-2.5 py-0.5 rounded-full bg-emerald-bright/15 text-emerald-bright font-bold border border-emerald-bright/25">
-                  {lesson.level}
-                </span>
-                <span class="text-xs font-mono text-slate-400">
-                  Difficulty {lesson.difficulty}
-                </span>
-              </div>
-
-              <h2 class="font-display text-xl font-bold text-white mb-2">
-                {lesson.title}
-              </h2>
-
-              <p class="text-xs sm:text-sm text-slate-300 leading-relaxed mb-4">
-                {lesson.description}
-              </p>
-
-              <div class="p-3 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-[11px] font-mono text-sky-400 font-semibold mb-6">
-                Objective: {lesson.targetZone}
-              </div>
-            </div>
-
-            <div class="flex items-center justify-between gap-3 pt-4 border-t border-white/[0.08]">
-              <a
-                href={`/learn/${lesson.lectureSlug}`}
-                class="text-xs font-medium text-slate-300 hover:text-white transition-colors"
-              >
-                Read Physics Theory &rarr;
-              </a>
-
-              <a
-                href={`/play?scenario=${lesson.id}`}
-                class="px-4 py-2 rounded-full bg-emerald-bright hover:bg-emerald text-[#05080C] hover:text-white font-bold text-xs transition-colors"
-              >
-                Load in Studio &rarr;
-              </a>
-            </div>
-          </div>
+      {/* Filter Bar */}
+      <div class="flex flex-wrap items-center gap-2 mb-8">
+        {[
+          { id: 'all', label: 'All Drills' },
+          { id: 'beginner', label: 'Beginner · Juniors' },
+          { id: 'intermediate', label: 'Intermediate' },
+          { id: 'expert', label: 'Expert' },
+        ].map((tab) => (
+          <button
+            type="button"
+            data-drill-tier={tab.id}
+            class="drill-tab-btn px-4 py-1.5 rounded-full text-xs font-mono border transition-colors bg-white/[0.04] border-white/[0.1] text-slate-300 hover:text-white"
+          >
+            {tab.label}
+          </button>
         ))}
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {lessons.map((lesson) => {
+          const pillClass =
+            lesson.tier === 'beginner'
+              ? 'bg-emerald-bright/15 text-emerald-bright border-emerald-bright/30'
+              : lesson.tier === 'intermediate'
+                ? 'bg-sky-400/15 text-sky-300 border-sky-400/30'
+                : 'bg-amber-400/15 text-amber-300 border-amber-400/30';
+          return (
+            <div
+              data-drill-card={lesson.tier}
+              class="drill-card bg-[#080C12]/80 backdrop-blur-xl border border-white/[0.10] p-6 rounded-3xl flex flex-col justify-between hover:border-emerald-bright/60 transition-all shadow-xl"
+            >
+              <div>
+                <div class="flex items-center justify-between mb-3">
+                  <span class={`text-[10px] font-mono px-2.5 py-0.5 rounded-full font-bold border ${pillClass}`}>
+                    {lesson.level}
+                  </span>
+                  <span class="text-xs font-mono text-slate-400">
+                    Difficulty {lesson.difficulty}
+                  </span>
+                </div>
+
+                <h2 class="font-display text-xl font-bold text-white mb-2">
+                  {lesson.title}
+                </h2>
+
+                <p class="text-xs sm:text-sm text-slate-300 leading-relaxed mb-4">
+                  {lesson.description}
+                </p>
+
+                <div class="p-3 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-[11px] font-mono text-sky-400 font-semibold mb-6">
+                  Objective: {lesson.targetZone}
+                </div>
+              </div>
+
+              <div class="flex items-center justify-between gap-2 pt-4 border-t border-white/[0.08]">
+                <a
+                  href={`/learn/${lesson.lectureSlug}#interactive-teaching-lab`}
+                  class="text-xs font-medium text-slate-300 hover:text-emerald-bright transition-colors"
+                >
+                  Auto Demo &amp; Theory &rarr;
+                </a>
+
+                <a
+                  href={`/play?scenario=${lesson.id}`}
+                  class="px-3.5 py-1.5 rounded-full bg-emerald-bright hover:bg-emerald text-[#05080C] hover:text-white font-bold text-xs transition-colors"
+                >
+                  Load in Studio &rarr;
+                </a>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   </div>
+
+  <script>
+    (function () {
+      const btns = Array.from(document.querySelectorAll('.drill-tab-btn')) as HTMLButtonElement[];
+      const cards = Array.from(document.querySelectorAll('.drill-card')) as HTMLElement[];
+
+      function apply(tier: string) {
+        const active = ['all', 'beginner', 'intermediate', 'expert'].includes(tier) ? tier : 'all';
+        btns.forEach((b) => {
+          const on = b.dataset.drillTier === active;
+          if (on) {
+            b.classList.add('bg-emerald-bright', 'text-[#05080C]', 'border-emerald-bright', 'font-bold');
+            b.classList.remove('bg-white/[0.04]', 'border-white/[0.1]', 'text-slate-300');
+          } else {
+            b.classList.remove('bg-emerald-bright', 'text-[#05080C]', 'border-emerald-bright', 'font-bold');
+            b.classList.add('bg-white/[0.04]', 'border-white/[0.1]', 'text-slate-300');
+          }
+        });
+        cards.forEach((c) => {
+          c.style.display = active === 'all' || c.dataset.drillCard === active ? 'flex' : 'none';
+        });
+      }
+
+      btns.forEach((b) => b.addEventListener('click', () => apply(b.dataset.drillTier || 'all')));
+      const paramTier = new URLSearchParams(window.location.search).get('level') || 'all';
+      apply(paramTier.toLowerCase());
+    })();
+  </script>
 </BaseLayout>

@@ -7,7 +7,7 @@ import { PhysicsEngine } from '../../engine/physics/PhysicsEngine';
 import { Ball } from '../../engine/physics/Ball';
 import { Vector2D } from '../../engine/math/Vector2D';
 import { CLOTH_CATALOG } from '../../engine/equipment/Equipment';
-import { ArrowRight, Play, Sparkles, Sliders, ChevronDown } from 'lucide-react';
+import { ArrowRight, Play, Sparkles, Sliders, ChevronDown, GraduationCap } from 'lucide-react';
 
 if (typeof window !== 'undefined') {
   gsap.registerPlugin(ScrollTrigger);
@@ -110,14 +110,30 @@ const CURRICULUM_ROWS = [
 export const HeroThreeScrollExperience: React.FC = () => {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const canvasHostRef = useRef<HTMLDivElement>(null);
+  const learnMenuRef = useRef<HTMLDivElement>(null);
   const clothTargetColorRef = useRef<THREE.Color | null>(null);
   const clothOverrideRef = useRef<THREE.Color | null>(null);
+  const [learnMenuOpen, setLearnMenuOpen] = useState(false);
   const [liveTelemetry, setLiveTelemetry] = useState({
     phase: 'PRE-STRIKE ALIGNMENT',
     cueSpeed: '0.0 km/h',
     spinState: '-0.85Y SCREW',
     scrollPct: 0,
   });
+
+  useEffect(() => {
+    const handleOutside = (e: MouseEvent | TouchEvent) => {
+      if (learnMenuRef.current && !learnMenuRef.current.contains(e.target as Node)) {
+        setLearnMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    document.addEventListener('touchstart', handleOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleOutside);
+      document.removeEventListener('touchstart', handleOutside);
+    };
+  }, []);
 
   useEffect(() => {
     const host = canvasHostRef.current;
@@ -777,7 +793,7 @@ export const HeroThreeScrollExperience: React.FC = () => {
               Scroll to sweep down the felt, watch 240Hz screw-back and cushion rebounds unfold in real time, and take full control inside the interactive 2D/3D table simulator.
             </p>
 
-            <div className="hero-kinetic flex flex-wrap items-center gap-3.5 mb-14">
+            <div className="hero-kinetic relative z-30 flex flex-wrap items-center gap-3.5 mb-14">
               <a
                 href="/play"
                 className="px-7 py-3.5 rounded-full bg-emerald-bright hover:bg-emerald text-[#05080C] hover:text-white font-bold text-xs sm:text-sm tracking-wide transition-all shadow-brass-glow active:scale-95 flex items-center gap-2"
@@ -785,6 +801,104 @@ export const HeroThreeScrollExperience: React.FC = () => {
                 <Play className="w-4 h-4 fill-current" />
                 <span>Launch Simulator</span>
               </a>
+
+              <div ref={learnMenuRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setLearnMenuOpen((v) => !v)}
+                  aria-expanded={learnMenuOpen}
+                  className={`px-6 py-3.5 rounded-full font-semibold text-xs sm:text-sm tracking-wide transition-all flex items-center gap-2 border ${
+                    learnMenuOpen
+                      ? 'bg-sky-400 text-[#05080C] border-sky-300 font-bold shadow-lg'
+                      : 'bg-white/[0.08] hover:bg-white/[0.15] backdrop-blur-md border-white/[0.16] text-white'
+                  }`}
+                >
+                  <GraduationCap className="w-4 h-4" />
+                  <span>Learn</span>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 transition-transform ${learnMenuOpen ? 'rotate-180' : ''}`}
+                  />
+                </button>
+
+                {learnMenuOpen && (
+                  <div className="absolute left-0 top-full mt-3 w-72 sm:w-80 rounded-3xl bg-[#080D14]/96 backdrop-blur-2xl border border-white/[0.16] shadow-2xl p-3 z-50">
+                    <div className="px-2 pt-1 pb-2 border-b border-white/[0.08] mb-2 flex items-center justify-between">
+                      <span className="text-[10px] font-mono uppercase tracking-[0.16em] text-emerald-bright font-bold">
+                        Select Expertise Path
+                      </span>
+                      <a
+                        href="/learn"
+                        className="text-[10px] font-mono text-sky-400 hover:text-white transition-colors"
+                      >
+                        All 9 Lectures &rarr;
+                      </a>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <a
+                        href="/learn?level=beginner"
+                        className="group flex items-start justify-between gap-2.5 p-2.5 rounded-2xl bg-white/[0.03] hover:bg-emerald-500/15 border border-transparent hover:border-emerald-400/35 transition-all"
+                      >
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-display font-bold text-white group-hover:text-emerald-bright">
+                              Beginner
+                            </span>
+                            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-bright">
+                              Juniors
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 leading-snug mt-0.5">
+                            Ghost-ball aim, straight potting, stun &amp; baulk safety.
+                          </p>
+                        </div>
+                        <ArrowRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-emerald-bright shrink-0 mt-1" />
+                      </a>
+
+                      <a
+                        href="/learn?level=intermediate"
+                        className="group flex items-start justify-between gap-2.5 p-2.5 rounded-2xl bg-white/[0.03] hover:bg-sky-500/15 border border-transparent hover:border-sky-400/35 transition-all"
+                      >
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-display font-bold text-white group-hover:text-sky-300">
+                              Intermediate
+                            </span>
+                            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-sky-500/15 text-sky-300">
+                              Club Play
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 leading-snug mt-0.5">
+                            Topspin follow, deep screw-back &amp; cushion rebounds.
+                          </p>
+                        </div>
+                        <ArrowRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-sky-300 shrink-0 mt-1" />
+                      </a>
+
+                      <a
+                        href="/learn?level=expert"
+                        className="group flex items-start justify-between gap-2.5 p-2.5 rounded-2xl bg-white/[0.03] hover:bg-amber-500/15 border border-transparent hover:border-amber-400/35 transition-all"
+                      >
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-display font-bold text-white group-hover:text-amber-300">
+                              Expert
+                            </span>
+                            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300">
+                              Mastery
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 leading-snug mt-0.5">
+                            Side English, squirt offset, 90° cuts &amp; masse escapes.
+                          </p>
+                        </div>
+                        <ArrowRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-amber-300 shrink-0 mt-1" />
+                      </a>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <a
                 href="/play?mode=3d"
                 className="px-6 py-3.5 rounded-full bg-white/[0.08] hover:bg-white/[0.15] backdrop-blur-md border border-white/[0.16] text-white font-semibold text-xs sm:text-sm tracking-wide transition-colors"
