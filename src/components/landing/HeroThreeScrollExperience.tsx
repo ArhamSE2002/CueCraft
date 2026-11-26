@@ -114,6 +114,7 @@ export const HeroThreeScrollExperience: React.FC = () => {
   const clothTargetColorRef = useRef<THREE.Color | null>(null);
   const clothOverrideRef = useRef<THREE.Color | null>(null);
   const [learnMenuOpen, setLearnMenuOpen] = useState(false);
+  const [sceneReady, setSceneReady] = useState(false);
   const [liveTelemetry, setLiveTelemetry] = useState({
     phase: 'PRE-STRIKE ALIGNMENT',
     cueSpeed: '0.0 km/h',
@@ -651,7 +652,13 @@ export const HeroThreeScrollExperience: React.FC = () => {
     camera.position.copy(camPosCurve.getPointAt(0));
     currentLook.copy(camLookCurve.getPointAt(0));
     camera.lookAt(currentLook);
-    applySceneAt(0);
+    applySceneAt(prefersReduced ? 0.08 : 0);
+
+    let disposed = false;
+    let loaderFadeTimer: number | null = null;
+    let loaderHideTimer: number | null = null;
+    let rafRevealA = 0;
+    let rafRevealB = 0;
 
     // ── 4. Lenis Smooth Scroll + GSAP ScrollTrigger Single-Loop Sync ─────────
     let lenis: Lenis | null = null;
@@ -671,15 +678,6 @@ export const HeroThreeScrollExperience: React.FC = () => {
           onUpdate: (self) => {
             scrubState.targetProgress = self.progress;
           },
-        });
-
-        // Staggered editorial entrances across acts
-        gsap.from('.hero-kinetic', {
-          y: 36,
-          opacity: 0,
-          duration: 0.85,
-          stagger: 0.09,
-          ease: 'power3.out',
         });
 
         gsap.utils.toArray<HTMLElement>('.scroll-card-reveal').forEach((card) => {
@@ -711,6 +709,51 @@ export const HeroThreeScrollExperience: React.FC = () => {
       }
     }, wrapper);
 
+    // Wait until WebGL has painted at least two composited frames + smooth minimum preloader dwell (~700ms)
+    const revealWhenPainted = () => {
+      if (disposed) return;
+      const startTime =
+        typeof window !== 'undefined' && (window as unknown as { __cuecraftLoaderStart?: number }).__cuecraftLoaderStart
+          ? (window as unknown as { __cuecraftLoaderStart: number }).__cuecraftLoaderStart
+          : performance.now();
+      const elapsed = performance.now() - startTime;
+      const minDwellMs = prefersReduced ? 150 : 720;
+      const remaining = Math.max(0, minDwellMs - elapsed);
+
+      loaderFadeTimer = window.setTimeout(() => {
+        if (disposed) return;
+        setSceneReady(true);
+
+        const loaderEl = document.getElementById('cuecraft-home-loader');
+        if (loaderEl) {
+          loaderEl.style.opacity = '0';
+          loaderEl.style.pointerEvents = 'none';
+          loaderHideTimer = window.setTimeout(() => {
+            loaderEl.style.display = 'none';
+          }, 520);
+        }
+
+        if (!prefersReduced) {
+          gsap.fromTo(
+            '.hero-kinetic',
+            { y: 28, opacity: 0 },
+            {
+              y: 0,
+              opacity: 1,
+              duration: 0.85,
+              stagger: 0.08,
+              ease: 'power3.out',
+              clearProps: 'transform,opacity',
+            }
+          );
+        }
+      }, remaining);
+    };
+
+    rafRevealA = requestAnimationFrame(() => {
+      rafRevealB = requestAnimationFrame(revealWhenPainted);
+    });
+
     const tickerFn = (time: number) => {
       if (lenis) lenis.raf(time * 1000);
       scrubState.progress += (scrubState.targetProgress - scrubState.progress) * 0.14;
@@ -730,6 +773,11 @@ export const HeroThreeScrollExperience: React.FC = () => {
     window.addEventListener('resize', handleResize);
 
     return () => {
+      disposed = true;
+      cancelAnimationFrame(rafRevealA);
+      cancelAnimationFrame(rafRevealB);
+      if (loaderFadeTimer !== null) clearTimeout(loaderFadeTimer);
+      if (loaderHideTimer !== null) clearTimeout(loaderHideTimer);
       window.removeEventListener('resize', handleResize);
       gsap.ticker.remove(tickerFn);
       gsCtx.revert();
@@ -747,7 +795,9 @@ export const HeroThreeScrollExperience: React.FC = () => {
       {/* FIXED FULL-VIEWPORT 3D WEBGL STAGE (THE CANVAS SANDWICH) */}
       <div
         ref={canvasHostRef}
-        className="fixed inset-0 z-0 pointer-events-none"
+        className={`fixed inset-0 z-0 pointer-events-none transition-opacity duration-500 ${
+          sceneReady ? 'opacity-100' : 'opacity-0'
+        }`}
         aria-hidden="true"
       />
 
